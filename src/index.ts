@@ -1,5 +1,5 @@
 import { verifyAccessJwt } from "#src/access";
-import { renderIndex, renderStats, renderWatch } from "#src/html";
+import { renderIndex, renderQueue, renderStats, renderWatch } from "#src/html";
 import { BACKFILL_MAX_DOWNLOADS, BACKFILL_MAX_POSTERS, DESCRIPTION_MAX, MAX_DOWNLOADS_PER_RUN, MAX_FILE_BYTES, MIN_FILE_BYTES, POST_ID_RE, TAG_MAX, TAGS_MAX, TITLE_MAX, VIDEO_KEY_RE } from "#src/limits";
 import { DEFAULT_LIBRARY_PAGE_SIZE, LIBRARY_PAGE_SIZES, Store, type LibraryQuery, type MetaPatch } from "#src/store";
 import { backfillPosters, sync, type Deps } from "#src/sync";
@@ -200,7 +200,7 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
     const perPage = q.perPage ?? DEFAULT_LIBRARY_PAGE_SIZE;
     const totalPages = Math.max(1, Math.ceil(total / perPage));
     q.page = Math.min(q.page ?? 1, totalPages);
-    return html(renderIndex(await store.listLibrary(q, perPage, (q.page - 1) * perPage), await store.getStatus(), q, total, isOwner, await store.listTags()));
+    return html(renderIndex(await store.listLibrary(q, perPage, (q.page - 1) * perPage), await store.getStatus(), q, total, isOwner, await store.listTags(), isOwner ? await store.countQueue().then((c) => c.pending + c.failed) : 0));
   }
   const watch = /^\/watch\/([^/]+)$/.exec(url.pathname);
   if (watch) {
@@ -218,8 +218,9 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
   const posterRoute = /^\/p\/([^/]+)$/.exec(url.pathname);
   if (posterRoute) return poster(store, posterRoute[1]!, req);
   if (url.pathname === "/stats") {
-    return html(renderStats(await store.stats(), await store.listByStatus(["pending", "failed"]), await store.getStatus(), await store.getPausedUntil(), await store.getMaxFileBytes()));
+    return html(renderStats(await store.stats(), await store.getStatus(), await store.getPausedUntil(), await store.getMaxFileBytes()));
   }
+  if (url.pathname === "/queue") return html(renderQueue(await store.listQueue(), await store.getStatus(), await store.getPausedUntil()));
   if (url.pathname === "/status") return json({ ...(await store.getStatus()), pausedUntil: await store.getPausedUntil(), userId: await store.getUserId() });
   if (url.pathname === "/oauth/start") {
     const state = randomToken(16), verifier = randomToken(64);

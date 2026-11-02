@@ -9,6 +9,7 @@ export type Cfg = OAuthCfg & { publicOrigin: string; telegram?: { token: string;
 export type Deps = { store: Store; fetch: Fetch; cfg: Cfg; now?: () => number; sleep?: (ms: number) => Promise<void>; random?: () => number };
 export type SyncResult = {
   skipped?: "paused" | "needs_reauth"; error?: string; pages: number; seen: number; downloaded: number; failed: number; bytes: number;
+  recorded?: number; queued?: number; // backfill only (ADR-0023): new rows recorded before downloading; live pending after the run
   durationBackfill?: { checked: number; updated: number; unavailable: number };
 };
 export type PosterResult = "stored" | "existing" | "unavailable" | "failed";
@@ -233,26 +234,56 @@ export async function sync(d: Deps, o: { backfill?: boolean; maxDownloads?: numb
     const budget = { downloads: 0, max: o.maxDownloads ?? MAX_DOWNLOADS_PER_RUN, posters: 0 };
     const hydratedPendingIds = new Set<string>();
     const pendingIds = await d.store.listPendingIds(TWEET_LOOKUP_BATCH_SIZE);
-    if (pendingIds.length > 0) {
-      const items = parseBookmarks(await fetchTweetsByIds(d.fetch, access, pendingIds));
-      for (const it of items) {
+    const hydratePending = async (ids: string[]) => {
+      if (ids.length === 0) return;
+      for (const it of parseBookmarks(await fetchTweetsByIds(d.fetch, access, ids))) {
         hydratedPendingIds.add(it.postId);
         await processItem(d, it, res, budget, maxFileBytes);
       }
-    }
+    };
 
-    for (let page = 0; page < maxPages; page++) {
-      const body = await fetchBookmarks(d.fetch, access, userId, { maxResults: pageSize, paginationToken });
-      res.pages++;
-      resultCount += body.meta?.result_count ?? 0;
-      const items = parseBookmarks(body);
-      res.seen += items.length;
-      for (const it of items) {
-        sawMedia ||= it.hasVideoMedia;
-        if (!hydratedPendingIds.has(it.postId)) await processItem(d, it, res, budget, maxFileBytes);
+    if (o.backfill) {
+      // ADR-0023: record every bookmark before downloading anything, so a request canceled mid-download
+      // (client disconnect) cannot lose bookmarks the run had read but not yet reached.
+      res.recorded = 0;
+      const seen: Item[] = [];
+      for (let page = 0; page < maxPages; page++) {
+        const body = await fetchBookmarks(d.fetch, access, userId, { maxResults: pageSize, paginationToken });
+        res.pages++;
+        resultCount += body.meta?.result_count ?? 0;
+        const items = parseBookmarks(body);
+        res.seen += items.length;
+        for (const it of items) {
+          sawMedia ||= it.hasVideoMedia;
+          if (!it.hasVideoMedia) await d.store.upsertBookmark(row(it, "no_video", d));
+          else { seen.push(it); if (await d.store.recordSeen(row(it, "pending", d))) res.recorded++; }
+        }
+        paginationToken = body.meta?.next_token;
+        if (!paginationToken || res.seen >= BACKFILL_MAX_ITEMS) break;
       }
-      paginationToken = body.meta?.next_token;
-      if (!paginationToken || res.seen >= BACKFILL_MAX_ITEMS) break;
+      // Pages already carry fresh media URLs for what they returned; look up only older pending rows they did not.
+      const seenIds = new Set(seen.map((it) => it.postId));
+      await hydratePending(pendingIds.filter((id) => !seenIds.has(id)));
+      // Only rows still pending: downloaded rows are not re-checked here (the cron's newest page reconciles them).
+      for (const it of seen) {
+        if (!hydratedPendingIds.has(it.postId) && (await d.store.getBookmark(it.postId))?.status === "pending") await processItem(d, it, res, budget, maxFileBytes);
+      }
+      res.queued = (await d.store.countQueue()).pending;
+    } else {
+      await hydratePending(pendingIds);
+      for (let page = 0; page < maxPages; page++) {
+        const body = await fetchBookmarks(d.fetch, access, userId, { maxResults: pageSize, paginationToken });
+        res.pages++;
+        resultCount += body.meta?.result_count ?? 0;
+        const items = parseBookmarks(body);
+        res.seen += items.length;
+        for (const it of items) {
+          sawMedia ||= it.hasVideoMedia;
+          if (!hydratedPendingIds.has(it.postId)) await processItem(d, it, res, budget, maxFileBytes);
+        }
+        paginationToken = body.meta?.next_token;
+        if (!paginationToken || res.seen >= BACKFILL_MAX_ITEMS) break;
+      }
     }
   } catch (e) {
     if (e instanceof XApiError) return breaker(d, e, res);

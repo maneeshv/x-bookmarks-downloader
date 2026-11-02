@@ -3,6 +3,7 @@
 export const VERSION = "v2";
 export const MAX_API_REQUESTS_PER_RUN = 4;          // normal run: ≤1 pending lookup + 1 bookmarks page + ≤2 token refresh attempts; asserted by tests, not enforced at runtime.
 export const MAX_DOWNLOADS_PER_RUN = 5;             // rest wait for the next tick (ADR-0008)
+export const CRON_INTERVAL_MS = 30 * 60_000;         // must match wrangler.toml `crons = ["*/30 * * * *"]`; /queue download estimates
 export const MIN_FILE_BYTES = 1024 ** 2;             // stats-page setting floor: 1 MiB (ADR-0015)
 export const DEFAULT_MAX_FILE_BYTES = 1024 ** 3;     // existing deployments remain at 1 GiB until the owner saves a setting
 export const MAX_FILE_BYTES = 5 * 1024 ** 3;         // absolute ceiling; owner-selected KV limit cannot exceed 5 GiB (ADR-0017)

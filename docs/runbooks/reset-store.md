@@ -26,7 +26,7 @@ OAuth user change. `wrangler` has no `r2 object list`, so R2 keys are derived fr
    Only re-queue the failed rows instead? Raise the file-size limit on `/stats` if needed, then click **Retry all failed** (resets every `failed` row; `POST /api/videos/retry-all`). Raw SQL equivalent, scoped to one reason: `UPDATE bookmarks SET status='pending', error=NULL WHERE error='too_large'`.
 4. Unpause: `npx wrangler kv key delete paused_until --binding KV --remote`.
 5. Sign in to x.com as the account to archive, open `${PUBLIC_ORIGIN}/oauth/start`, approve; `/status` shows the new `userId`.
-6. Drain: open `${PUBLIC_ORIGIN}/backfill?downloads=30` repeatedly until it returns `downloaded: 0, failed: 0` (~3 min per call).
+6. Capture: open `${PUBLIC_ORIGIN}/backfill` once. It records every bookmark before downloading (ADR-0023), so its JSON `recorded` is the bookmark count and `queued` is what is left to download; a browser timeout does not lose anything. Then watch `${PUBLIC_ORIGIN}/queue`: the cron drains 5 every 30 minutes. To go faster, open `/backfill?downloads=30` again (each call can take minutes with large files).
 
 ## Verify
 `npx wrangler d1 execute x-downloader --remote --command "SELECT status, COUNT(*) FROM bookmarks GROUP BY status"` matches expectations; a video plays on `/`.

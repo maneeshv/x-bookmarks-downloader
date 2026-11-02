@@ -1,5 +1,5 @@
 # Deploy the Worker
-When: first deploy, or after a code/config change needs redeploying | Last verified: 2026-09-03
+When: first deploy, or after a code/config change needs redeploying | Last verified: 2026-10-31
 
 `wrangler.toml` is local and gitignored (copy `wrangler.toml.example`, fill in real ids). Network
 `wrangler`/`npm` calls need the Bash sandbox off (EPERM otherwise).
@@ -163,7 +163,7 @@ Read `message.chat.id` from the JSON response. Feed it to `wrangler secret put T
 ### 9. Authorize + backfill
 Open `${PUBLIC_ORIGIN}/oauth/start` in a browser (logs in through Access, then the X consent
 screen). `${PUBLIC_ORIGIN}/status` should then show `auth: "ok"`. Open `${PUBLIC_ORIGIN}/backfill`
-once — expect JSON with `pages`, `seen`, `downloaded`. Open `${PUBLIC_ORIGIN}/` and confirm a video
+once — expect JSON with `pages`, `seen`, `recorded`, `downloaded`, `queued`; `/queue` lists what is still waiting. Open `${PUBLIC_ORIGIN}/` and confirm a video
 plays.
 
 If the JSON shows `seen > 0` and `downloaded == 0` (and `/status` `counts.failed` is 0), the field

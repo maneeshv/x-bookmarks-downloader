@@ -325,35 +325,32 @@ test("non-XApiError throw during download does not abort the run", async () => {
   assert.ok((await w.store.getStatus()).lastRun);
 });
 
-test("breaker preserves bytes downloaded before the failure", async () => {
-  let page = 0;
+// A backfill reads every page before downloading (ADR-0023), so bytes-before-failure is exercised on the
+// cron path: the pending lookup downloads first, then the bookmarks page fails.
+const pendingThenBookmarks = async (bookmarks: () => Scripted, over: (url: string) => Scripted | null = () => null) => {
   const w = world((url) => {
-    if (url.includes("/bookmarks")) {
-      page++;
-      if (page === 1) return { status: 200, body: fx() };
-      return { status: 429, body: {}, headers: { "x-rate-limit-reset": String(NOW / 1000 + 900) } };
-    }
+    const o = over(url); if (o) return o;
+    if (url.includes("/bookmarks")) return bookmarks();
     return routes(fx())(url);
   });
+  await w.store.upsertBookmark({
+    post_id: "1000000000000000001", posted_at: null, text: null, post_url: "https://x.com/i/status/1000000000000000001", has_video: 1,
+    status: "pending", error: null, r2_key: null, bytes: null, duration_ms: null, preview_url: null, now: "2026-08-01T00:00:00Z",
+  });
   await authed(w.store);
-  const r = await sync(w.d, { backfill: true });
+  return w;
+};
+
+test("breaker preserves bytes downloaded before the failure", async () => {
+  const w = await pendingThenBookmarks(() => ({ status: 429, body: {}, headers: { "x-rate-limit-reset": String(NOW / 1000 + 900) } }));
+  const r = await sync(w.d);
   assert.ok(r.bytes > 0);
   assert.equal((await w.store.getStatus()).totalBytes, r.bytes);
 });
 
 test("breaker preserves bytes before needs_reauth on a dead 401", async () => {
-  let page = 0;
-  const w = world((url) => {
-    if (url.includes("/bookmarks")) {
-      page++;
-      if (page === 1) return { status: 200, body: fx() };
-      return { status: 401, body: {} };
-    }
-    if (url.includes("oauth2/token")) return { status: 400, body: {} };
-    return routes(fx())(url);
-  });
-  await authed(w.store);
-  const r = await sync(w.d, { backfill: true });
+  const w = await pendingThenBookmarks(() => ({ status: 401, body: {} }), (url) => url.includes("oauth2/token") ? { status: 400, body: {} } : null);
+  const r = await sync(w.d);
   assert.equal(r.skipped, "needs_reauth");
   const s = await w.store.getStatus();
   assert.equal(s.totalBytes, r.bytes);
@@ -388,6 +385,74 @@ test("backfill paginates with max_results=90 until no next_token", async () => {
   assert.equal(r.pages, 2); assert.equal(r.seen, 12);
   assert.equal(new URL(w.f.calls[0][0]).searchParams.get("max_results"), "90");
   assert.equal(new URL(w.f.calls.filter(([u]) => u.includes("/bookmarks"))[1][0]).searchParams.get("pagination_token"), "abc");
+});
+
+const pageOf = (ids: string[], next?: string) => ({
+  data: ids.map((id, i) => ({ id, text: `v${id}`, attachments: { media_keys: [`13_${id}`] } })),
+  includes: { media: ids.map((id) => ({ media_key: `13_${id}`, type: "video", preview_image_url: `https://pbs.twimg.com/${id}.jpg`, variants: [{ bit_rate: 1, content_type: "video/mp4", url: `https://video.twimg.com/${id}.mp4` }] })) },
+  meta: { result_count: ids.length, ...(next ? { next_token: next } : {}) },
+});
+const ids = (prefix: string, n: number) => Array.from({ length: n }, (_, i) => `${prefix}${String(i).padStart(3, "0")}`);
+
+test("backfill records every bookmark on every page before its first download (ADR-0023)", async () => {
+  const pages = [pageOf(ids("4000000000000001", 4), "p2"), pageOf(ids("4000000000000002", 4), "p3"), pageOf(ids("4000000000000003", 4))];
+  let rowsAtFirstDownload: number | null = null;
+  const w = world((url) => {
+    if (url.includes("/bookmarks")) {
+      const t = new URL(url).searchParams.get("pagination_token");
+      return { status: 200, body: pages[t === "p2" ? 1 : t === "p3" ? 2 : 0] };
+    }
+    if (url.includes("video.twimg.com")) rowsAtFirstDownload ??= Number((w.d1.db.prepare("SELECT COUNT(*) AS n FROM bookmarks").get() as { n: number }).n);
+    return routes(pages[0])(url);
+  });
+  await authed(w.store);
+  const r = await sync(w.d, { backfill: true });
+  assert.equal(rowsAtFirstDownload, 12, "a request canceled during the first download has already recorded all 12 bookmarks");
+  assert.equal(r.recorded, 12);
+  assert.equal(r.downloaded, MAX_DOWNLOADS_PER_RUN);
+  assert.equal(r.queued, 12 - MAX_DOWNLOADS_PER_RUN);
+});
+
+test("backfill does not head R2 or fetch posters for page items that are already downloaded", async () => {
+  const done = ids("5000000000000000", 6), fresh = "5000000000000009";
+  const w = world(routes(pageOf([...done, fresh])));
+  for (const id of done) {
+    await w.store.upsertBookmark({ post_id: id, posted_at: null, text: null, post_url: `https://x.com/i/status/${id}`, has_video: 1, status: "downloaded", error: null, r2_key: `${id}.mp4`, bytes: 1, duration_ms: null, preview_url: null, now: "2026-08-01T00:00:00Z" });
+    await w.r2.put(`${id}.mp4`, new Uint8Array([1]));
+  }
+  await authed(w.store);
+  const heads: string[] = [], head = w.r2.head.bind(w.r2);
+  w.r2.head = async (key: string) => { heads.push(key); return head(key); };
+  const r = await sync(w.d, { backfill: true });
+  assert.deepEqual(heads.filter((k) => !k.includes(fresh)), [], "no R2 head for downloaded rows");
+  assert.deepEqual(w.f.calls.map(([u]) => u).filter((u) => u.includes("pbs.twimg.com")), [`https://pbs.twimg.com/${fresh}.jpg`]);
+  assert.deepEqual([r.recorded, r.downloaded, r.queued], [1, 1, 0]);
+});
+
+test("backfill leaves a failed row failed and reports recorded/queued", async () => {
+  const b = fx(); delete b.meta.next_token;
+  const w = world(routes(b));
+  await w.store.upsertBookmark({ post_id: "1000000000000000001", posted_at: null, text: null, post_url: "https://x.com/i/status/1000000000000000001", has_video: 1, status: "failed", error: "too_large", r2_key: null, bytes: 99, duration_ms: null, preview_url: null, now: "2026-08-01T00:00:00Z" });
+  await authed(w.store);
+  const r = await sync(w.d, { backfill: true, maxDownloads: 1 });
+  const failed = (await w.store.getBookmark("1000000000000000001"))!;
+  assert.deepEqual([failed.status, failed.error, failed.bytes], ["failed", "too_large", 99]);
+  assert.equal(w.f.calls.filter(([u]) => u.includes("1000000000000000001")).length, 0, "the failed post is not re-downloaded");
+  // fixture videos: 2 (one video), 4 (two videos), 5 (no variants → failed). Budget 1 stores 2; 4 stays pending.
+  assert.deepEqual([r.recorded, r.downloaded, r.queued], [3, 1, 1]);
+  assert.equal((await w.store.getBookmark("1000000000000000004"))!.status, "pending");
+});
+
+test("a backfill whose second bookmarks page fails keeps the first page recorded", async () => {
+  let page = 0;
+  const w = world((url) => {
+    if (url.includes("/bookmarks")) return ++page === 1 ? { status: 200, body: fx() } : { status: 429, body: {}, headers: { "x-rate-limit-reset": String(NOW / 1000 + 900) } };
+    return routes(fx())(url);
+  });
+  await authed(w.store);
+  await sync(w.d, { backfill: true });
+  assert.equal((await w.store.getBookmark("1000000000000000004"))?.status, "pending");
+  assert.equal((await w.store.getBookmark("1000000000000000003"))?.status, "no_video");
 });
 
 test("a deleted post is never re-downloaded even though its key is gone from R2 (ADR-0011)", async () => {

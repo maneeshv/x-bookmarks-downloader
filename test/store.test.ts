@@ -214,6 +214,36 @@ test("listPendingIds returns the oldest pending rows first and respects its limi
   assert.deepEqual(await s.listPendingIds(2), ["1", "2"]);
 });
 
+test("recordSeen inserts a new row as pending and never touches an existing row (ADR-0023)", async () => {
+  const { s } = mk();
+  assert.equal(await s.recordSeen(row({ post_id: "1", now: "2026-10-31T00:00:00Z" })), true);
+  assert.deepEqual([(await s.getBookmark("1"))!.status, (await s.getBookmark("1"))!.first_seen_at], ["pending", "2026-10-31T00:00:00Z"]);
+  await s.upsertBookmark(row({ post_id: "2", status: "failed", error: "too_large", bytes: 9, now: "2026-08-01T00:00:00Z" }));
+  await dl(s, "3");
+  await s.upsertBookmark(row({ post_id: "4", now: "2026-08-02T00:00:00Z" }));
+  await dl(s, "5"); await s.markDeleted("5", "2026-09-02T00:00:00Z");
+  const before = await Promise.all(["1", "2", "3", "4", "5"].map((id) => s.getBookmark(id)));
+  for (const id of ["1", "2", "3", "4", "5"]) assert.equal(await s.recordSeen(row({ post_id: id, now: "2026-10-31T01:00:00Z" })), false, id);
+  assert.deepEqual(await Promise.all(["1", "2", "3", "4", "5"].map((id) => s.getBookmark(id))), before);
+});
+
+test("listQueue lists live pending rows in drain order and failed rows newest first; countQueue counts both", async () => {
+  const { s, d1 } = mk();
+  await s.upsertBookmark(row({ post_id: "3", now: "2026-08-03T00:00:00Z" }));
+  await s.upsertBookmark(row({ post_id: "2", now: "2026-08-01T00:00:00Z" }));
+  await s.upsertBookmark(row({ post_id: "1", now: "2026-08-01T00:00:00Z" }));
+  // markDeleted only tombstones downloaded rows; write deleted_at directly to prove the filter anyway.
+  await s.upsertBookmark(row({ post_id: "7", now: "2026-07-01T00:00:00Z" })); d1.db.exec("UPDATE bookmarks SET deleted_at = '2026-09-01T00:00:00Z' WHERE post_id = '7'");
+  await s.upsertBookmark(row({ post_id: "4", status: "failed", error: "too_large", now: "2026-08-04T00:00:00Z" }));
+  await s.upsertBookmark(row({ post_id: "5", status: "failed", error: "http_404", now: "2026-08-05T00:00:00Z" }));
+  await dl(s, "6");
+  const q = await s.listQueue();
+  assert.deepEqual(q.pending.map((r) => r.post_id), await s.listPendingIds());
+  assert.deepEqual(q.pending.map((r) => r.post_id), ["1", "2", "3"]);
+  assert.deepEqual(q.failed.map((r) => r.post_id), ["5", "4"]);
+  assert.deepEqual(await s.countQueue(), { pending: 3, failed: 2 });
+});
+
 test("listPosterSources selects live downloaded rows using a stable keyset", async () => {
   const { s } = mk();
   await dl(s, "11111", { preview_url: "https://pbs.twimg.com/a.jpg" });

@@ -111,6 +111,14 @@ export class Store {
       .bind(r.post_id, r.now, r.posted_at, r.text, r.post_url, r.has_video, r.status, r.error, r.r2_key, r.bytes, r.duration_ms, r.preview_url, r.now)
       .run();
   }
+  // Insert-only (ADR-0023): a backfill records each bookmark it reads before downloading anything, without
+  // resetting a failed row, reordering the pending queue, or reviving a tombstone. Returns whether a row was added.
+  async recordSeen(r: BookmarkUpsert): Promise<boolean> {
+    const res = await this.db.prepare(`${UPSERT.slice(0, UPSERT.indexOf("ON CONFLICT"))}ON CONFLICT(post_id) DO NOTHING`)
+      .bind(r.post_id, r.now, r.posted_at, r.text, r.post_url, r.has_video, r.status, r.error, r.r2_key, r.bytes, r.duration_ms, r.preview_url, r.now)
+      .run();
+    return res.meta.changes > 0;
+  }
   getBookmark(postId: string): Promise<BookmarkRow | null> {
     return this.db.prepare("SELECT * FROM bookmarks WHERE post_id = ?").bind(postId).first<BookmarkRow>();
   }
@@ -161,6 +169,19 @@ export class Store {
       .prepare("SELECT post_id FROM bookmarks WHERE status = 'pending' AND deleted_at IS NULL ORDER BY updated_at ASC, post_id ASC LIMIT ?")
       .bind(limit).all<{ post_id: string }>();
     return results.map((r) => r.post_id);
+  }
+  // The /queue page: pending in the cron's drain order (same ORDER BY as listPendingIds), failed newest first.
+  async listQueue(limit = 500): Promise<{ pending: BookmarkRow[]; failed: BookmarkRow[] }> {
+    const q = (status: BookmarkStatus, order: string) => this.db
+      .prepare(`SELECT * FROM bookmarks WHERE status = ? AND deleted_at IS NULL ORDER BY ${order} LIMIT ?`)
+      .bind(status, limit).all<BookmarkRow>().then((r) => r.results);
+    return { pending: await q("pending", "updated_at ASC, post_id ASC"), failed: await q("failed", "updated_at DESC, post_id DESC") };
+  }
+  async countQueue(): Promise<{ pending: number; failed: number }> {
+    const row = await this.db
+      .prepare("SELECT COALESCE(SUM(status = 'pending'), 0) AS pending, COALESCE(SUM(status = 'failed'), 0) AS failed FROM bookmarks WHERE status IN ('pending', 'failed') AND deleted_at IS NULL")
+      .first<{ pending: number; failed: number }>();
+    return { pending: row?.pending ?? 0, failed: row?.failed ?? 0 };
   }
   async listMissingDurations(limit: number): Promise<MissingDuration[]> {
     const { results } = await this.db

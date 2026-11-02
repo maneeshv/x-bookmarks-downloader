@@ -56,7 +56,7 @@ const jsonPost = (a: Awaited<ReturnType<typeof app>>, path: string, body: unknow
 
 test("every route is 403 without a valid Access JWT", async () => {
   const { env, f } = await app();
-  for (const p of ["/", "/status", "/oauth/start", "/oauth/callback?code=x&state=y", "/backfill", "/v/1.mp4", "/p/12345", "/watch/12345", "/api/videos/12345", "/api/settings/max-file-bytes", "/stats"]) {
+  for (const p of ["/", "/status", "/oauth/start", "/oauth/callback?code=x&state=y", "/backfill", "/v/1.mp4", "/p/12345", "/watch/12345", "/api/videos/12345", "/api/settings/max-file-bytes", "/stats", "/queue"]) {
     assert.equal((await handle(new Request(ORIGIN + p), env, f)).status, 403, p);
   }
   assert.equal((await handle(new Request(ORIGIN + "/api/videos/12345", { method: "DELETE" }), env, f)).status, 403, "DELETE without JWT");
@@ -70,7 +70,7 @@ test("viewer can only browse, watch, stream, and load posters; owner-only and fu
   const ranged = await a.as(a.viewerJwt, "/v/12345.mp4", { headers: { range: "bytes=1-2" } });
   assert.equal(ranged.status, 206);
   for (const path of [
-    "/stats", "/status", "/oauth/start", "/oauth/callback?code=x&state=y", "/backfill", "/future",
+    "/stats", "/queue", "/status", "/oauth/start", "/oauth/callback?code=x&state=y", "/backfill", "/future",
     "/api/videos/retry-all", "/api/settings/max-file-bytes", "/api/videos/12345", "/api/videos/12345/retry",
   ]) assert.equal((await a.as(a.viewerJwt, path)).status, 403, path);
   assert.equal((await a.as(a.viewerJwt, "/", { method: "POST" })).status, 403, "POST viewer route");
@@ -87,7 +87,7 @@ test("owner identity is trimmed and case-insensitive; missing identity/configura
 
   for (const email of [undefined, "   "]) {
     const token = await a.jwtFor(email);
-    for (const path of ["/", "/watch/12345", "/v/12345.mp4", "/stats", "/status", "/oauth/start", "/oauth/callback", "/backfill", "/api/videos/12345"]) {
+    for (const path of ["/", "/watch/12345", "/v/12345.mp4", "/stats", "/queue", "/status", "/oauth/start", "/oauth/callback", "/backfill", "/api/videos/12345"]) {
       assert.equal((await a.as(token, path)).status, 403, `${String(email)} ${path}`);
     }
   }
@@ -296,6 +296,7 @@ test("cinematic navigation preserves Library filters and scopes owner actions", 
       assert.equal(anchor.includes('aria-current="page"'), fav === expectedFav);
     }
     assert.ok(html.includes('href="/stats"'));
+    assert.ok(html.includes('href="/queue"'), "owner rail links to the queue");
     assert.ok(html.includes('href="/oauth/start"'));
     assert.ok(html.includes('href="/cdn-cgi/access/logout"'));
     const form = html.match(/<form class="library-controls"[\s\S]*?<\/form>/)?.[0];
@@ -305,7 +306,9 @@ test("cinematic navigation preserves Library filters and scopes owner actions", 
   }
   const viewer = renderIndex([], { auth: "needs_reauth" }, {}, 0, false);
   assert.match(viewer, /View only/);
-  assert.doesNotMatch(viewer, /href="\/stats"|href="\/oauth\/start"/);
+  assert.doesNotMatch(viewer, /href="\/stats"|href="\/queue"|href="\/oauth\/start"/);
+  assert.match(renderIndex([], {}, {}, 0, true, [], 7), /href="\/queue"[^>]*>[\s\S]*?<span>Queue<\/span><span class="rail-count"[^>]*>7<\/span><\/a>/, "queue count shown when non-zero");
+  assert.doesNotMatch(renderIndex([], {}, {}, 0, true, [], 0), /class="rail-count"/, "no count badge for an empty queue");
 });
 
 test("POST /api/videos/:id validates, then updates title/description/favorite/tags", async () => {
@@ -476,7 +479,7 @@ test("library, watch and stats pages link to the Access logout URL", async () =>
   assert.match((await (await (await seeded()).get("/stats")).text()), /href="\/cdn-cgi\/access\/logout"/);
 });
 
-test("/stats shows counts, failures by reason, and the pending/failed posts; / links to it", async () => {
+test("/stats shows counts and failures by reason, links to the queue instead of listing posts; / links to it", async () => {
   const a = await seeded();
   await a.store.upsertBookmark(dlRow("12346", { bytes: 7 }));
   await a.store.upsertBookmark(dlRow("22222", { status: "failed", error: "too_large", r2_key: null, bytes: 1536 * 1024 ** 2, text: "<b>big</b> one" }));
@@ -490,11 +493,10 @@ test("/stats shows counts, failures by reason, and the pending/failed posts; / l
   const body = await res.text();
   for (const needle of [
     'data-stat="downloaded">1<', 'data-stat="pending">1<', 'data-stat="failed">2<', 'data-stat="no_video">1<', 'data-stat="deleted">1<',
-    'data-stat="bytes">5 B<', "too_large</td><td>2", "&lt;b&gt;big&lt;/b&gt; one", "2026-08-30T12:00:00Z", "storage", "seen 20",
-    'href="https://x.com/i/status/33333"', 'data-retry="22222"', 'href="/backfill', "<th>Size</th>", '<td>1536.0 MB</td><td><button type="button" data-retry="22222"',
-    'id="max-file-mb"', 'value="1024"', 'max="5120"', '5 GB hard maximum',
+    'data-stat="bytes">5 B<', "too_large</td><td>2", "2026-08-30T12:00:00Z", "storage", "seen 20",
+    'href="/queue"', 'href="/backfill"', 'id="max-file-mb"', 'value="1024"', 'max="5120"', '5 GB hard maximum',
   ]) assert.ok(body.includes(needle), needle);
-  assert.ok(!body.includes("<b>big</b>"), "text is escaped");
+  for (const absent of ["big", "33333", "data-retry", "?downloads=30"]) assert.ok(!body.includes(absent), `no ${absent} on /stats`);
   assert.ok((await (await a.get("/")).text()).includes('href="/stats"'), "library header links to /stats");
 });
 
@@ -540,8 +542,7 @@ test("POST /api/videos/retry-all resets every failed row to pending and returns 
   const a = await seeded();
   await a.store.upsertBookmark(dlRow("22222", { status: "failed", error: "too_large", r2_key: null, bytes: null }));
   await a.store.upsertBookmark(dlRow("22223", { status: "failed", error: "http_403", r2_key: null, bytes: null }));
-  assert.ok((await a.get("/stats")).ok);
-  assert.ok((await (await a.get("/stats")).text()).includes('id="retry-all"'), "button in the failed section");
+  assert.ok((await (await a.get("/queue")).text()).includes('id="retry-all"'), "button in the queue's failed section");
   assert.equal((await a.send("/api/videos/retry-all", { method: "POST" })).status, 415, "no content-type");
   assert.equal((await a.send("/api/videos/retry-all", { method: "GET" })).status, 405);
   const res = await jsonPost(a, "/api/videos/retry-all", {});
@@ -564,4 +565,44 @@ test("DELETE /api/videos/:id subtracts the row's bytes from status.totalBytes on
   await a.store.patchStatus({ totalBytes: 3 });
   await a.send("/api/videos/12346", { method: "DELETE" });
   assert.equal((await a.store.getStatus()).totalBytes, 0, "clamped at 0");
+});
+
+test("/queue lists live pending posts in drain order and failed posts with Retry; empty state otherwise", async () => {
+  const a = await seeded();
+  assert.match(await (await a.get("/queue")).text(), /Nothing waiting/);
+  await a.store.upsertBookmark(dlRow("33332", { status: "pending", r2_key: null, bytes: null, text: "second <i>in</i> line", now: "2026-08-04T00:00:00Z" }));
+  await a.store.upsertBookmark(dlRow("33331", { status: "pending", r2_key: null, bytes: null, text: "first in line", now: "2026-08-03T00:00:00Z" }));
+  await a.store.upsertBookmark(dlRow("33333", { status: "pending", error: "http_503", r2_key: null, bytes: null, text: "retrying", now: "2026-08-05T00:00:00Z" }));
+  await a.store.upsertBookmark(dlRow("22222", { status: "failed", error: "too_large", r2_key: null, bytes: 1536 * 1024 ** 2, text: "<b>big</b> one" }));
+  const res = await a.get("/queue");
+  assert.equal(res.status, 200);
+  const body = await res.text();
+  for (const needle of [
+    'data-stat="queue-pending">3<', 'data-stat="queue-failed">1<', "&lt;b&gt;big&lt;/b&gt; one", "second &lt;i&gt;in&lt;/i&gt; line", "http_503",
+    'href="https://x.com/i/status/33331"', '<td>1536.0 MB</td><td><button type="button" data-retry="22222"', 'id="retry-all"', "too_large",
+    'href="/"', 'href="/stats"', 'href="/backfill"', 'href="/cdn-cgi/access/logout"',
+  ]) assert.ok(body.includes(needle), needle);
+  assert.ok(!body.includes("<b>big</b>") && !body.includes("<i>in</i>"), "text is escaped");
+  assert.ok(body.indexOf("33331") < body.indexOf("33332") && body.indexOf("33332") < body.indexOf("33333"), "drain order");
+  assert.doesNotMatch(body, /Nothing waiting/);
+});
+
+test("renderQueue estimates download times per cron tick and shows a stalled banner instead when paused or unauthorized", async () => {
+  const { renderQueue, nextTick } = await import("#src/html");
+  const at = (iso: string) => Date.parse(iso);
+  assert.equal(nextTick(at("2026-10-31T00:29:59Z")), at("2026-10-31T00:30:00Z"));
+  assert.equal(nextTick(at("2026-10-31T00:30:00Z")), at("2026-10-31T01:00:00Z"));
+  assert.equal(nextTick(at("2026-10-31T23:59:59Z")), at("2026-11-01T00:00:00Z"));
+  const pending = Array.from({ length: 6 }, (_, i) => ({ post_id: `4000${i}`, first_seen_at: "2026-10-31T00:00:00Z", posted_at: null, text: `p${i}`, post_url: `https://x.com/i/status/4000${i}`, has_video: 1, status: "pending", error: null, r2_key: null, bytes: null, duration_ms: null, preview_url: null, updated_at: "2026-10-31T00:00:00Z", title: null, description: null, favorite: 0, tags: null, deleted_at: null } as const));
+  const now = at("2026-10-31T06:40:00Z");
+  const html = renderQueue({ pending: [...pending], failed: [] }, { lastRun: "2026-10-31T06:30:00Z" }, 0, now);
+  assert.equal((html.match(/≈ 2026-10-31 07:00 UTC/g) ?? []).length, 5, "positions 1–5 download on the next tick");
+  assert.equal((html.match(/≈ 2026-10-31 07:30 UTC/g) ?? []).length, 2, "position 6 and the drain summary on the tick after");
+  assert.match(html, /data-stat="queue-next">2026-10-31 07:00 UTC</);
+  const paused = renderQueue({ pending: [...pending], failed: [] }, {}, at("2026-11-01T00:00:00Z"), now);
+  assert.match(paused, /paused until 2026-11-01T00:00:00.000Z/);
+  assert.doesNotMatch(paused, /≈/);
+  const reauth = renderQueue({ pending: [...pending], failed: [] }, { auth: "needs_reauth" }, 0, now);
+  assert.match(reauth, /href="\/oauth\/start"/);
+  assert.doesNotMatch(reauth, /≈/);
 });
