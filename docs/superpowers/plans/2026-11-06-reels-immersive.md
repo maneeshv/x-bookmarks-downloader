@@ -32,3 +32,7 @@ Files: ADR0027, ARCHITECTURE, STATUS, JOURNAL, QA evidence, PR40.
 - [x] Verify CI result and clean worktree. No merge, deploy, production scan or media mutation.
 
 Publication: `a258d6b`, PR #40 updated; CI run42222304781 passed. Immersive mode NOT DEPLOYED. Physical device limits are recorded in QA, not marked as tested.
+
+
+## Deployment authorization follow-up — 2026-11-06
+Owner subsequently confirmed “Deploy the reels change”, lifting the Reels deployment hold only. Released `c6d8731` / implementation `a258d6b` as Worker `ee3627d4-16f6-4f24-bd0a-59a0dfc08156` at100% traffic. Exact live/tested/release source equality, preserved config/thumbnail behavior and Access smokes are recorded in the [QA evidence](../../research/2026-11-06-reels-immersive-qa.md). No merge; approximate-thumbnail work stays excluded/undeployed. Physical-device and signed-in acceptance remain pending.

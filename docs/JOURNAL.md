@@ -1,5 +1,12 @@
 # Journal
 
+## 2026-11-06 — Deploy immersive Reels only
+- Did: owner explicitly authorized “Deploy the reels change”, lifting only the Reels deployment hold. Thumbnail owner confirmed no newer production/config changes since `e9dcde25` / `95e2571`; approximate matching stays excluded and undeployed. No merge, migrations, media deletion or unrelated production mutations.
+- Decided: release source `c6d8731` (implementation `a258d6b`), whose only product differences from the verified live baseline are `src/reels-client.ts` and `src/reels-html.ts`. Preserve exact duplicate/identical-thumbnail review. Rollback: `e9dcde25-bf50-4933-92de-f8cb6807a7bd`.
+- Learned / gotcha: no new operational gotcha; followed the documented live-source/config preflight and Access smoke procedure.
+- Verified: unchanged-source prior evidence remains 181 tests, both typechecks, 48 browser checks and independent review; predeploy CI run42222538283 passed. Fresh dry-run bundle byte-equals the previously tested bundle. All vars/resource bindings and tracked config matched before deploy. Published Worker `ee3627d4-16f6-4f24-bd0a-59a0dfc08156` at 2026-11-06T13:09:07Z with100% traffic. Fetched live source byte-equals tested/release bundles, SHA256 `eb4440fe6285c1328d7d66ed5afa083291dad9ca5bb37edbe1d3f14085a765bd`. Release browser factories execute; immersive controls and exact-thumbnail label/API are present. Bindings, compatibility/observability, cron and subdomain settings unchanged. Signed-out Library/Reels/Duplicates/thumbnail API GET302; workers.dev404.
+- Left undone: signed-in production playback, physical iOS/Android and assistive-tech acceptance. PR #40 remains unmerged; approximate PR #39 remains under no-deploy/no-merge hold. Deployment evidence and owner test steps recorded in QA.
+
 ## 2026-11-06 — Add optional immersive Reels (no deployment)
 - Did: owner approved full-viewport mode and tap-toggle overlays while retaining current Reels, with final explicit no-deploy instruction. Inspected CI: pull_request/main checks only, bundle command is dry-run. Coordinated nonoverlapping Reels file ownership with approximate-thumbnail agent; ADR27 Reels, ADR28 thumbnails. Wrote approved addendum and execution plan.
 - Decided: see ADR0027; same player/session, container fullscreen enhancement over viewport fallback, always-accessible Exit.
