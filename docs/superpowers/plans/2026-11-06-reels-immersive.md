@@ -28,5 +28,7 @@ Files: scripts/reels-immersive-qa.mjs (new if helpful), docs/research/2026-11-06
 ## Task 3 — publication only
 Files: ADR0027, ARCHITECTURE, STATUS, JOURNAL, QA evidence, PR40.
 - [x] Record browser/platform limits and implemented behavior. Run npm run check and git diff --check.
-- [ ] Verify CI has no auto-deploy step, commit conventionally and push feat/reels-view. Update PR40 to distinguish previous live release from undeployed immersive increment.
-- [ ] Verify CI result and clean worktree. No merge, deploy, production scan or media mutation.
+- [x] Verify CI has no auto-deploy step, commit conventionally and push feat/reels-view. Update PR40 to distinguish previous live release from undeployed immersive increment.
+- [x] Verify CI result and clean worktree. No merge, deploy, production scan or media mutation.
+
+Publication: `a258d6b`, PR #40 updated; CI run42222304781 passed. Immersive mode NOT DEPLOYED. Physical device limits are recorded in QA, not marked as tested.

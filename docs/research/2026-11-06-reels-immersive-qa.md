@@ -40,3 +40,6 @@ Inspected mobile, hidden-controls, narrow and short-landscape captures. Video fi
 
 ## Limits
 Physical iOS Safari/Android Chrome, mobile browser chrome/safe-area behavior, assistive technology, audio carry-over and long/high-bitrate media on constrained networks are not certified by desktop emulation. No signed-in production validation of this increment: **NOT DEPLOYED**. The earlier combined release remains the last recorded live version; no new production verification was needed for this local-only task.
+
+## Publication
+Source `a258d6b`, pushed to PR #40. CI run42222304781 passed in31s. Temporary browser/fixture processes stopped after verification. This increment remains **NOT DEPLOYED** and unmerged.
