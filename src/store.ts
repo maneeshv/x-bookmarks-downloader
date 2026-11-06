@@ -1,4 +1,5 @@
-import { DEFAULT_MAX_FILE_BYTES, MAX_FILE_BYTES, MIN_FILE_BYTES } from "#src/limits";
+import { DEFAULT_MAX_FILE_BYTES, MAX_FILE_BYTES, MIN_FILE_BYTES, REELS_MAX_ITEMS, TITLE_MAX } from "#src/limits";
+import type { ReelItem } from "#src/reels-state";
 import type { Tokens } from "#src/x";
 
 export type BookmarkStatus = "no_video" | "pending" | "downloaded" | "failed";
@@ -134,6 +135,29 @@ export class Store {
       .prepare(`SELECT * FROM bookmarks WHERE ${where} ORDER BY ${LIBRARY_ORDER[sort]} LIMIT ? OFFSET ?`)
       .bind(...args, limit, offset).all<BookmarkRow>();
     return results;
+  }
+  async listReels(query: LibraryQuery = {}): Promise<ReelItem[]> {
+    const { sort = "newest" } = query, { where, args } = libraryFilter(query);
+    // GLOB's * is unrestricted, so separately reject every non-ASCII digit. Check before LIMIT.
+    const digits = (value: string, min: number, max: number) =>
+      `(length(${value}) BETWEEN ${min} AND ${max} AND ${value} NOT GLOB '*[^0-9]*')`;
+    const base = "substr(r2_key, 1, length(r2_key) - 4)", dash = "instr(r2_key, '-')";
+    const playable = `${digits("post_id", 5, 25)} AND instr(post_id, char(0)) = 0
+      AND r2_key IS NOT NULL AND instr(r2_key, char(0)) = 0 AND substr(r2_key, -4) = '.mp4'
+      AND ((${dash} = 0 AND ${digits(base, 5, 25)}) OR
+        (${dash} > 0 AND ${digits(`substr(r2_key, 1, ${dash} - 1)`, 5, 25)}
+        AND ${digits(`substr(r2_key, ${dash} + 1, length(r2_key) - ${dash} - 4)`, 1, 2)}))`;
+    const { results } = await this.db.prepare(`SELECT post_id AS postId, r2_key AS videoKey,
+      substr(title, 1, ${TITLE_MAX}) AS title, CASE WHEN title IS NULL THEN text END AS fallbackText,
+      duration_ms AS durationMs, preview_url IS NOT NULL AND preview_url != '' AS hasPoster
+      FROM bookmarks WHERE ${where} AND ${playable} ORDER BY ${LIBRARY_ORDER[sort]} LIMIT ?`)
+      .bind(...args, REELS_MAX_ITEMS + 1).all<{ postId: string; videoKey: string; title: string | null; fallbackText: string | null; durationMs: number | null; hasPoster: number }>();
+    return results.map((r) => ({
+      postId: r.postId, videoKey: r.videoKey,
+      title: (r.title ?? ((r.fallbackText ?? "").replace(/\s+/g, " ").trim().slice(0, 80) || r.postId)).slice(0, TITLE_MAX),
+      durationMs: typeof r.durationMs === "number" && Number.isFinite(r.durationMs) && r.durationMs >= 0 ? r.durationMs : null,
+      hasPoster: !!r.hasPoster,
+    }));
   }
   async listTags(): Promise<TagOption[]> {
     const { results } = await this.db

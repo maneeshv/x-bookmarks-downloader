@@ -9,7 +9,8 @@
     "types": "wrangler types",
     "dev": "wrangler dev --test-scheduled",
     "deploy": "wrangler deploy",
-    "check": "npm run typecheck && npm test && scripts/check-session.sh"
+    "check:bundle": "wrangler deploy --dry-run --outdir .superpowers/reels-bundle && node --no-warnings scripts/check-reels-bundle.mjs .superpowers/reels-bundle/index.js",
+    "check": "npm run typecheck && npm test && npm run check:bundle && scripts/check-session.sh"
   },
   "devDependencies": {
     "typescript": "^5.9.0",

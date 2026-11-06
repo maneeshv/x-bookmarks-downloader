@@ -1,11 +1,12 @@
 # Reels: continuous browsing of saved videos
 
-Date: 2026-11-06 | Status: PROPOSED
+Date: 2026-11-06 | Status: APPROVED FOR IMPLEMENTATION
 
 Evidence: [committee investigation](../../research/2026-11-06-reels-feasibility.md).
 Scope: detailed product and technical design; implementation and deployment are separate work.
-The owner requested this spec after reviewing the committee recommendation. The defaults below
-are proposed together for review; this document does not mark them approved for execution.
+The owner approved the proposed defaults and visual previews on 2026-11-06 and authorized build,
+test, commit, push and PR. Deployment is explicitly excluded. Physical-device validation remains a
+release gate; the approved build may proceed to a reviewable PR with that gate clearly recorded.
 
 ## 1. Outcome and preservation contract
 
@@ -432,3 +433,15 @@ Further browser evidence used while writing this spec: MDN
 [sessionStorage](https://developer.mozilla.org/en-US/docs/Web/API/Window/sessionStorage) and
 [Page Visibility API](https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API), fetched
 through Context7 `/mdn/content` on 2026-11-06. Other platform evidence is linked in the committee report.
+
+## 13. Approved visual references
+
+Approved on 2026-11-06. These images show composition and interaction intent; native controls and
+miniature Details forms are illustrative. The written behavior/security contract takes precedence.
+
+![Reels mobile and desktop mockup](../../research/assets/2026-11-06-reels-preview/reels-ui-mockup.png)
+
+![Reels journey and implementation](../../research/assets/2026-11-06-reels-preview/reels-experience-infographic.png)
+
+[Generation brief and inspection](../../research/2026-11-06-reels-visual-brief.md).
+[Implementation plan](../plans/2026-11-06-reels-view.md).

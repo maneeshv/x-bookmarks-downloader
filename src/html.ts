@@ -1,4 +1,5 @@
-import { CRON_INTERVAL_MS, MAX_DOWNLOADS_PER_RUN, MAX_FILE_BYTES } from "#src/limits";
+import { CRON_INTERVAL_MS, MAX_DOWNLOADS_PER_RUN, MAX_FILE_BYTES, POST_ID_RE, VIDEO_KEY_RE } from "#src/limits";
+import { reelsHref, reelsLibraryHref, type ReelsContext } from "#src/reels-context";
 import { DEFAULT_LIBRARY_PAGE_SIZE, LIBRARY_PAGE_SIZES, type BookmarkRow, type LibraryQuery, type StatRow, type Status, type TagOption } from "#src/store";
 
 const esc = (s: string | null) => (s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
@@ -96,6 +97,10 @@ const pageNumbers = (current: number, total: number): Array<number | "gap"> => {
 };
 
 export function renderIndex(rows: BookmarkRow[], status: Status, q: LibraryQuery = {}, total = rows.length, isOwner = true, availableTags: TagOption[] = [], queueCount = 0): string {
+  const reelsEntry = libraryParams(q);
+  const firstReel = rows.find((r) => POST_ID_RE.test(r.post_id) && r.r2_key && VIDEO_KEY_RE.test(r.r2_key));
+  if (firstReel) { reelsEntry.set("from", firstReel.post_id); reelsEntry.set("at", firstReel.post_id); }
+  const reelsLink = `/reels${reelsEntry.size ? `?${reelsEntry}` : ""}`;
   const pageNumber = q.page ?? 1, perPage = q.perPage ?? DEFAULT_LIBRARY_PAGE_SIZE;
   const selectedTags = q.tags ?? [], selectedKeys = new Set(selectedTags.map((tag) => tag.toLowerCase()));
   const totalPages = Math.max(1, Math.ceil(total / perPage));
@@ -126,6 +131,7 @@ export function renderIndex(rows: BookmarkRow[], status: Status, q: LibraryQuery
   <nav class="rail-nav" aria-label="Library navigation">
     <a class="rail-link" data-library-view="library" href="${esc(link({ fav: false, page: 1 }))}"${!q.fav ? ' aria-current="page"' : ""}>${icon("library")}<span>Library</span></a>
     <a class="rail-link" data-library-view="favourites" href="${esc(link({ fav: true, page: 1 }))}"${q.fav ? ' aria-current="page"' : ""}>${icon("heart")}<span>Favourites</span></a>
+    <a class="rail-link" data-library-view="reels" href="${esc(reelsLink)}">${icon("library")}<span>Reels</span></a>
     ${isOwner ? `<a class="rail-link" href="/stats">${icon("stats")}<span>Stats</span></a>` : ""}
     ${isOwner ? `<a class="rail-link" href="/queue">${icon("clock")}<span>Queue</span>${queueCount ? `<span class="rail-count" aria-label="${queueCount} waiting">${queueCount}</span>` : ""}</a>` : ""}
   </nav>
@@ -174,8 +180,13 @@ trigger.onclick=()=>popover.hidden?open():close();search.oninput=render;search.o
 </script>`, "library-page");
 }
 
-export function renderWatch(r: BookmarkRow, q: LibraryQuery = {}, isOwner = true, availableTags: TagOption[] = []): string {
-  const backToLibrary = libraryHref(q, `#video-${r.post_id}`), deleteReturn = libraryHref(q);
+export function renderWatchUnavailable(reels: ReelsContext): string {
+  return page("Video unavailable", `${appHeader("Video unavailable", "", false)}<main id="content" class="watch-shell"><h1>This video is unavailable.</h1><p><a class="nav-link" href="${esc(reelsHref(reels))}">Back to Reels</a><a class="nav-link" href="${esc(reelsLibraryHref(reels))}">Back to library</a></p></main>`);
+}
+
+export function renderWatch(r: BookmarkRow, q: LibraryQuery = {}, isOwner = true, availableTags: TagOption[] = [], reels?: ReelsContext): string {
+  const backToLibrary = reels ? reelsLibraryHref(reels) : libraryHref(q, `#video-${r.post_id}`);
+  const deleteReturn = reels ? reelsHref({ ...reels, at: r.post_id }) : libraryHref(q);
   const initialTags = tags(r), initialKeys = new Set(initialTags.map((tag) => tag.toLowerCase()));
   const initialChips = initialTags.map((tag) => `<span class="picker-chip"><span>${esc(tag)}</span><button type="button" aria-label="Remove ${esc(tag)}">Remove</button></span>`).join("");
   const initialOptions = availableTags.map(({ tag, count }) => {
@@ -219,7 +230,7 @@ speed.onchange=()=>{v.playbackRate=Number(speed.value)};const stepSpeed=d=>{cons
 const seek=s=>{v.currentTime=Math.min(Math.max(0,v.currentTime+s),v.duration||0)},toggle=()=>v.paused?v.play():v.pause();
 document.addEventListener("keydown",e=>{if(e.metaKey||e.ctrlKey||e.altKey||e.target===v||e.target.closest?.("input,textarea,select,button,a"))return;const act={" ":toggle,k:toggle,j:()=>seek(-10),l:()=>seek(10),arrowleft:()=>seek(-5),arrowright:()=>seek(5),m:()=>{v.muted=!v.muted},f:()=>v.requestFullscreen?v.requestFullscreen():v.webkitEnterFullscreen(),"<":()=>stepSpeed(-1),">":()=>stepSpeed(1)}[e.key.toLowerCase()];if(act){e.preventDefault();act()}})})();
 <\/script>`;
-  return page(title(r), `${appHeader("Watching from your library", `<a class="nav-link" href="${esc(backToLibrary)}">Back to library</a><a class="nav-link desktop-only" href="/v/${esc(r.r2_key)}" download="${esc(r.post_id)}.mp4">Download</a>`, isOwner)}
+  return page(title(r), `${appHeader("Watching from your library", `${reels ? `<a class="nav-link" href="${esc(reelsHref({ ...reels, at: r.post_id }))}">Back to Reels</a>` : ""}<a class="nav-link" href="${esc(backToLibrary)}">Back to library</a><a class="nav-link desktop-only" href="/v/${esc(r.r2_key)}" download="${esc(r.post_id)}.mp4">Download</a>`, isOwner)}
 <main id="content" class="watch-shell">
   <div class="watch-layout">
     <div class="player-wrap"><video controls playsinline preload="metadata" src="/v/${esc(r.r2_key)}"${r.preview_url ? ` poster="/p/${esc(r.post_id)}"` : ""}></video>

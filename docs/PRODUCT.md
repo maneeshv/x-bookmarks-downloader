@@ -1,6 +1,6 @@
 # Product: x-downloader
 
-Updated: 2026-09-03 (tags integrated with duration sorting, durable posters, and read-only access)
+Updated: 2026-11-06 (Reels implemented in source; deployment tracked in STATUS)
 
 ## Problem
 The owner bookmarks video posts in the X/Twitter mobile or web app. Those bookmarks are trapped in X: no export, videos can be deleted, and the official API charges for bookmark reads. The owner wants every bookmarked video to land automatically in their own cloud storage without touching anything after bookmarking.
@@ -23,6 +23,12 @@ viewer-owned data are non-goals.**
 5. An exact-email viewer can browse, load posters, watch, and download the complete library but
    cannot reach metadata, delete, retry, settings, status, X OAuth, or backfill capabilities
    (ADR-0019).
+
+6. Reels (`/reels`) offers a separate swipe view over the full selected Library results, in Library
+   order or stable Shuffle. One clip plays at a time, loops until manual advance, and starts muted in
+   a new session. Details opens Watch; returning restores the surviving reel and tab-local position,
+   paused. Reels progress stays separate from owner Watch progress. Oversized selections are clearly
+   rejected rather than silently truncated (ADR-0024). Existing Library/Watch workflows remain.
 
 ## Constraints (from the owner, 2026-08-29)
 - Runs **entirely in the cloud**: scheduling, downloading, storage. No home server, no laptop dependency.

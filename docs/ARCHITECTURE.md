@@ -1,6 +1,6 @@
 # Architecture (as built)
 
-Updated: 2026-09-11
+Updated: 2026-11-06 (source implementation; deployment tracked in STATUS)
 
 Single Cloudflare Worker, `x-downloader`, deployed on the Custom Domain `https://xrender.uk` (ADR-0012; workers.dev off since 2026-08-30)
 (ADR-0008: one Worker, no queue — fetch and download happen in the same cron run). Access uses the
@@ -90,6 +90,26 @@ All HTML pages (`/`, `/watch/:id`, `/stats`, `/queue`) carry a "Log out" link to
    - D1 upsert (`store.upsertBookmark`, `ON CONFLICT` never downgrades a `downloaded` row) records every bookmark seen, video or not — this is the searchable index (ADR-0007); R2 stays the download truth.
 4. On an `XApiError` (`src/x.ts`) thrown by the pending lookup, bookmarks-page fetch, or a token refresh, `breaker()` folds any bytes downloaded this run into `status.totalBytes` first (so a mid-run failure doesn't lose byte accounting), then dispatches on `e.status`: 401 → one forced token refresh attempt, and if both refresh tokens are dead, `needsReauth()` (pause 24h, alert once, `auth: "needs_reauth"`); 429 → pause until `x-rate-limit-reset` (or +15min if absent) + alert `api_429`; 403 → pause 24h + alert `api_403`; any other status (5xx) → no pause, just `lastRun`/`lastError` recorded, and the run ends for this tick (picked up again next scheduled run). This is separate from the per-video mp4 download outcomes inside step 3's `processItem()`/`download()`, which never throw `XApiError` and never reach `breaker()`: a 5xx or thrown exception on the mp4 fetch itself is recorded `pending` (retried later) and a 4xx/`too_large`/`no_variants` is `failed` (not retried), per-video, while the run continues to the next item.
 5. On success: updates `status` (`lastRun`, `auth: "ok"`, `totalBytes`, `counts`), clears `needs_reauth`/`api_403`/`api_429` alerts, and alerts (KV-tracked) on `STALE_PARSER_RUNS` (30 consecutive runs with results but zero media, possible parser drift; once) and on `STORAGE_ALERT_BYTES` (9 GB) exceeded — once per `STORAGE_ALERT_STEP_BYTES` (3 GiB) step crossed, keyed `storage:<step>GB`; every other `storage*` key is cleared each run, so a shrink below a step re-arms it (ADR-0005, amended 2026-08-31).
+
+## Reels browsing (ADR-0024)
+
+GET `/reels` is explicitly allowed for existing read-only viewers and returns private/no-store HTML.
+`Store.listReels` applies the existing Library filters/sorts plus SQL post/media-key eligibility before
+its 1,001-row sentinel limit. Only post ID, validated media key, bounded title, duration and poster flag
+enter the page. More than 1,000 items or 512 KiB escaped JSON yields a capacity page without a playlist.
+The route does not call X or preload media bodies.
+
+`reels-context.ts` owns canonical validated Reels/Watch/Library return links. `reels-state.ts` owns
+versioned, bounded three-session storage, seeded shuffle and reconciliation. `reels-client.ts` owns
+one video element, its source lifecycle and the three-slot native snap track; `reels-html.ts` renders
+scoped responsive chrome and emits the same tested factories into the page. `keep_names=false` avoids
+esbuild injecting Worker-scoped helpers into serialized functions; `check:bundle` verifies this in CI.
+
+Reels never reads/writes owner Watch resume. Details still opens existing Watch controls; Reels-origin
+Back/Delete/unavailable paths return to validated session context. The original Library page/card
+context survives shuffle. Returning/backgrounding stays paused; new sessions attempt muted playback.
+Real-phone swipe/native-control/audio verification remains a release gate; this source change is not
+deployed. See [implementation QA](research/2026-11-06-reels-implementation-qa.md).
 
 ## KV keys (`src/store.ts`)
 `oauth` (Tokens JSON), `userId`, `status` (`Status` JSON), `paused_until` (epoch ms string),

@@ -36,3 +36,7 @@ export const X_SCOPES = "bookmark.read tweet.read users.read offline.access";
 // No author_id / user.fields: may bill as $0.01 user reads (docs/research/2026-08-29-x-api-v2.md)
 export const BOOKMARK_QUERY =
   "expansions=attachments.media_keys&media.fields=media_key,type,variants,preview_image_url,duration_ms&tweet.fields=created_at,text,attachments";
+
+// Complete Reels snapshot limits (ADR-0024); one extra row detects overflow.
+export const REELS_MAX_ITEMS = 1000;
+export const REELS_MAX_PAYLOAD_BYTES = 512 * 1024;

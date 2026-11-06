@@ -1,0 +1,41 @@
+[
+  {
+    "kind": "ui",
+    "attempt": "1",
+    "route": "POST /v1/responses",
+    "requested_model": "gpt-6-astra",
+    "image_model": "unverified",
+    "requested_size": "2048x1536",
+    "actual_size": "1448x1086",
+    "requested_quality": "high",
+    "bytes": 1528923,
+    "seconds": 76.5,
+    "selected": true
+  },
+  {
+    "kind": "infographic",
+    "attempt": "1",
+    "route": "POST /v1/responses",
+    "requested_model": "gpt-6-astra",
+    "image_model": "unverified",
+    "requested_size": "2048x1152",
+    "actual_size": "1672x941",
+    "requested_quality": "high",
+    "bytes": 1707713,
+    "seconds": 114.2,
+    "selected": false
+  },
+  {
+    "kind": "infographic",
+    "attempt": "2",
+    "route": "POST /v1/responses",
+    "requested_model": "gpt-6-astra",
+    "image_model": "unverified",
+    "requested_size": "2048x1152",
+    "actual_size": "1536x1024",
+    "requested_quality": "high",
+    "bytes": 1669495,
+    "seconds": 79.9,
+    "selected": true
+  }
+]

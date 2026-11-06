@@ -1,4 +1,6 @@
 name = "x-downloader"
+# Reels emits tested self-contained functions; esbuild name helpers would escape into browser source.
+keep_names = false
 main = "src/index.ts"
 compatibility_date = "2026-08-29"
 

@@ -1,6 +1,8 @@
 import { verifyAccessJwt } from "#src/access";
-import { renderIndex, renderQueue, renderStats, renderWatch } from "#src/html";
-import { BACKFILL_MAX_DOWNLOADS, BACKFILL_MAX_POSTERS, DESCRIPTION_MAX, MAX_DOWNLOADS_PER_RUN, MAX_FILE_BYTES, MIN_FILE_BYTES, POST_ID_RE, TAG_MAX, TAGS_MAX, TITLE_MAX, VIDEO_KEY_RE } from "#src/limits";
+import { renderIndex, renderQueue, renderStats, renderWatch, renderWatchUnavailable } from "#src/html";
+import { parseReelsContext } from "#src/reels-context";
+import { renderReels } from "#src/reels-html";
+import { BACKFILL_MAX_DOWNLOADS, BACKFILL_MAX_POSTERS, DESCRIPTION_MAX, MAX_DOWNLOADS_PER_RUN, MAX_FILE_BYTES, MIN_FILE_BYTES, POST_ID_RE, REELS_MAX_ITEMS, REELS_MAX_PAYLOAD_BYTES, TAG_MAX, TAGS_MAX, TITLE_MAX, VIDEO_KEY_RE } from "#src/limits";
 import { DEFAULT_LIBRARY_PAGE_SIZE, LIBRARY_PAGE_SIZES, Store, type LibraryQuery, type MetaPatch } from "#src/store";
 import { backfillPosters, sync, type Deps } from "#src/sync";
 import { authorizeUrl, exchangeCode, fetchMe, pkceChallenge, randomToken, type Fetch } from "#src/x";
@@ -139,7 +141,7 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
   }
   catch { return new Response("forbidden", { status: 403 }); }
   const isOwner = !!env.OWNER_EMAIL?.trim() && email.toLowerCase() === env.OWNER_EMAIL.trim().toLowerCase();
-  const viewerPath = url.pathname === "/" || /^\/watch\/[^/]+$/.test(url.pathname) || /^\/(?:v|p)\/[^/]+$/.test(url.pathname);
+  const viewerPath = url.pathname === "/" || url.pathname === "/reels" || /^\/watch\/[^/]+$/.test(url.pathname) || /^\/(?:v|p)\/[^/]+$/.test(url.pathname);
   if (!isOwner && (req.method !== "GET" || !viewerPath)) return new Response("forbidden", { status: 403 });
 
   const d = deps(env, f);
@@ -202,12 +204,24 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
     q.page = Math.min(q.page ?? 1, totalPages);
     return html(renderIndex(await store.listLibrary(q, perPage, (q.page - 1) * perPage), await store.getStatus(), q, total, isOwner, await store.listTags(), isOwner ? await store.countQueue().then((c) => c.pending + c.failed) : 0));
   }
+  if (url.pathname === "/reels") {
+    const context = parseReelsContext(url, parseLibraryQuery(url)), items = await store.listReels(context.library);
+    const encoded = JSON.stringify(items).replace(/</g, "\\u003c");
+    const capacity = items.length > REELS_MAX_ITEMS || new TextEncoder().encode(encoded).byteLength > REELS_MAX_PAYLOAD_BYTES;
+    return new Response(renderReels(capacity ? [] : items, context, capacity), {
+      headers: { "content-type": "text/html; charset=utf-8", "cache-control": "private, no-store" },
+    });
+  }
   const watch = /^\/watch\/([^/]+)$/.exec(url.pathname);
   if (watch) {
     if (!POST_ID_RE.test(watch[1]!)) return new Response("not found", { status: 404 });
+    const q = parseLibraryQuery(url);
+    const reels = url.searchParams.get("view") === "reels" ? { ...parseReelsContext(url, q), at: watch[1]! } : undefined;
     const b = await store.getBookmark(watch[1]!);
-    if (!b || b.status !== "downloaded" || b.deleted_at || !b.r2_key) return new Response("not found", { status: 404 });
-    return html(renderWatch(b, parseLibraryQuery(url), isOwner, isOwner ? await store.listTags() : []));
+    if (!b || b.status !== "downloaded" || b.deleted_at || !b.r2_key || (reels && !VIDEO_KEY_RE.test(b.r2_key))) {
+      return reels ? new Response(renderWatchUnavailable(reels), { status: 404, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "private, no-store" } }) : new Response("not found", { status: 404 });
+    }
+    return html(renderWatch(b, q, isOwner, isOwner ? await store.listTags() : [], reels));
   }
   if (url.pathname.startsWith("/v/")) {
     let key: string;
