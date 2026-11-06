@@ -1,29 +1,24 @@
 Updated: 2026-11-06
 
 ## Now
-- **Reels + duplicate/thumbnail review deployed for owner testing:** `https://xrender.uk/reels`, Worker `e9dcde25-bf50-4933-92de-f8cb6807a7bd` at 100%, source commit `95e2571`, deployed 2026-11-06T11:58:56Z. Reels PR #40 includes already-live PR #39 (`763ac15`, thumbnail implementation `3699ff1`); both PRs remain open. Fetched live source exactly equals the release bundle; Scan thumbnails and its owner-only API remain present. All vars/resource bindings, domain, 30-minute cron and disabled workers.dev/previews are preserved. No migration or production data deletion. Rollback: `2002eed9-d2db-4ac7-98d5-530f44514131` (thumbnail release).
-- **Verification:** combined branch passes 171 tests, both typechecks, bundle check, 25 built-Worker Chrome checks, independent integration review and CI. Signed-out Library/Reels/Duplicates/thumbnail API return Access 302; workers.dev returns404. Native Arc opened Reels and reached Cloudflare Sign in. Signed-in production behavior and physical iOS/Android acceptance remain pending. [Reels spec + previews](superpowers/specs/2026-11-06-reels-view-design.md), [Reels QA](research/2026-11-06-reels-implementation-qa.md), [thumbnail QA](research/2026-11-06-thumbnail-suggestions-qa.md).
-
-- **Download queue + save-first backfill merged:** PR #38 merge `8e23143` is an ancestor of checkout `1ed0d7d`. Last recorded deployment (2026-10-31): Worker `92b1c6a8-8095-4373-9d8b-e8f9c0ca7df5` at 100%; version/source/settings rechecked on 2026-11-06. [Spec](superpowers/specs/2026-10-31-download-queue-design.md), [plan](superpowers/plans/2026-10-31-download-queue.md), ADR-0023. Rollback recorded: `150f0f24-08b7-44c5-8573-ed30aa2beafc`.
-- **Cinematic Library complete:** [plan](superpowers/plans/2026-09-11-cinematic-shelf-library.md), merged PR #33 (`bedc4ff`). The 2026-09-11 verification passed both TypeScript projects and 89 tests; desktop/mobile evidence is in [design-qa.md](../design-qa.md). Runtime checks were not repeated for the 2026-11-06 documentation-only investigation.
-
+- **Immersive Reels implemented, verified, NOT DEPLOYED:** optional Full screen, viewport fallback, tap-toggle overlays, persistent Exit and accessible seeking. Same player/session; current layout retained. [Approved addendum](superpowers/specs/2026-11-06-reels-immersive-design.md), [plan](superpowers/plans/2026-11-06-reels-immersive.md), [QA/screenshots](research/2026-11-06-reels-immersive-qa.md), ADR0027. 181 tests, both typechecks, bundle/session checks, 23 new and 25 existing browser checks pass; independent review approved. Commit/push update to PR #40 in progress. **Final owner instruction: no deploy or merge for this increment.**
+- **Last recorded production release unchanged by this task:** combined Reels + duplicate/identical-thumbnail review, Worker `e9dcde25-bf50-4933-92de-f8cb6807a7bd`, source `95e2571`, 100% at 2026-11-06T11:58:56Z. Exact source/config verification is in [prior QA](research/2026-11-06-reels-implementation-qa.md). No production calls or mutations in this increment. Rollback recorded: `2002eed9-d2db-4ac7-98d5-530f44514131`.
+- **Parallel approximate-thumbnail work:** owned by PR #39 agent in a separate worktree, ADR0028 reserved. Reels branch retains already-live identical-thumbnail/duplicate behavior; approximate work is not integrated. Both agents have explicit no-deploy/no-merge instructions. CI inspected: tests/typechecks/dry-run bundle only, no auto-deploy.
 
 ## Next
-0. Owner, signed in: test `/reels` on iOS Safari/Android Chrome: unmute, swipe both ways, scrub/pause/fullscreen, Shuffle, Details → Back to Reels; then verify desktop buttons/keyboard and long media on constrained networks. Review PR #40 and #39 without separately deploying an older branch.
-1. Owner, signed in: test Library → Duplicates → Scan thumbnails for review-only suggestions; use Scan for duplicates for confirmed-video groups and explicit keep/remove choices. Review/merge PR #39 after testing.
-2. Owner, signed in: confirm `/backfill` recorded/queued results and `/queue` behavior; reconcile the download-queue plan's remaining checkboxes and obsolete unrecorded-bookmarks GOTCHAS line. The 2026-11-06 D1 snapshot has no pending/failed rows but does not prove every X bookmark was recorded.
-3. Run the authenticated production smoke test: confirm Longest/Shortest, reuse an existing tag, create/save a new tag, and preserve a two-tag filter through Watch → Back. Prior available browsers reached Access login; browser authentication was not rechecked on 2026-11-06.
-4. Obtain one viewer's exact verified Cloudflare-account email; then execute the exact-email Access rollout and viewer/non-listed-account tests.
-5. Update the main checkout's gitignored `wrangler.toml` with `OWNER_EMAIL` so new Paseo worktrees do not omit it.
+1. Review PR #40 immersive increment and PR #39 approximate work independently. Obtain fresh explicit authorization before any merge/deployment; reconcile both branches before any future production release.
+2. Complete physical iOS Safari/Android Chrome acceptance: browser chrome/safe areas, tap/swipe/scrub, sound, rotation/fullscreen exit, screen-reader focus and long/high-bitrate media. Desktop emulation cannot certify these.
+3. Owner-signed-in production checks from the prior release remain pending (the available browser reached Cloudflare Sign in): Library, Reels, Watch return, duplicate/thumbnail scans; no real deletion needed.
+4. Reconcile the download-queue plan's owner `/backfill`/`queue` checks; a zero-pending D1 snapshot does not prove every bookmark was recorded.
+5. For viewer expansion, obtain one friend's exact verified email and perform owner/viewer/non-listed-account acceptance before changing Access policies.
 
 ## Blocked
-- Access expansion is blocked on authenticated owner verification, one friend's exact verified Cloudflare-account email, and a separate non-listed account for the negative test.
+- Physical-device/assistive-technology acceptance needs owner devices. This does not block the authorized reviewable PR.
+- Access expansion still needs authenticated owner validation and test accounts; no admission policy changed.
 
-## Done (last 7; older in JOURNAL)
-- 2026-11-06 Added review-only identical-thumbnail suggestions to PR #39 and deployed `2002eed9`; 132 tests and CI pass.
-- 2026-11-06 Implemented, verified, pushed PR #39 and deployed duplicate review (`4b83031c`); no production video deletion.
-- 2026-11-06 Investigated duplicate review with Opus 5.5/Sol and read-only D1/R2 evidence; wrote the proposed design spec without implementing or deleting data.
-- 2026-10-31 Deployed save-first backfill + `/queue` as `92b1c6a8` (PR #38).
-- 2026-10-31 Diagnosed the `/backfill` timeout (canceled requests leave bookmarks unrecorded); spec approved; built save-first backfill and the `/queue` page with TDD and local browser QA (not deployed).
-- 2026-09-11 Deployed Option 1 at 100%, retained live-only playback features, passed 89 tests and source/routing verification.
-- 2026-09-10 Generated three imagegen Library previews and documented the complete functionality preservation contract; no code changes.
+## Done (last 5; older in JOURNAL)
+- 2026-11-06 Implemented optional immersive Reels locally, with no deployment.
+- 2026-11-06 Deployed combined original Reels + identical-thumbnail review as `e9dcde25`, source `95e2571`.
+- 2026-11-06 Added/deployed identical-thumbnail suggestions (`2002eed9`, PR #39) before combined Reels deployment.
+- 2026-11-06 Built/published original Reels PR #40 with approved spec and visual previews.
+- 2026-10-31 Deployed save-first backfill + Queue (`92b1c6a8`, PR #38).

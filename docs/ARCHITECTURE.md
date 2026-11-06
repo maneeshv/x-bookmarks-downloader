@@ -112,8 +112,10 @@ esbuild injecting Worker-scoped helpers into serialized functions; `check:bundle
 Reels never reads/writes owner Watch resume. Details still opens existing Watch controls; Reels-origin
 Back/Delete/unavailable paths return to validated session context. The original Library page/card
 context survives shuffle. Returning/backgrounding stays paused; new sessions attempt muted playback.
-Real-phone swipe/native-control/audio verification remains a release gate; this source change is not
-deployed. See [implementation QA](research/2026-11-06-reels-implementation-qa.md).
+Real-phone swipe/native-control/audio verification remains pending; deployment state is tracked in STATUS. See [implementation QA](research/2026-11-06-reels-implementation-qa.md).
+
+### Optional immersive presentation (ADR-0027; deployment tracked in STATUS)
+The explicit Full screen control keeps the same video/controller/session and expands the snap track to the available viewport. The container Fullscreen API is an enhancement; denial or absence retains a fixed 100dvh layout. Immersive native video controls are replaced by the existing overlay playback/order/navigation actions plus a labelled seek slider. A short video tap hides/restores overlays; hidden groups are inert and excluded from accessibility exposure, while Exit remains available. Tab reveals controls, Escape/native exit restores normal layout and entry focus. Normal Reels retains native controls. Pointer movement/cancel/multi-touch prevent swipes from becoming taps. Pending fullscreen exits cannot cancel a later viewport re-entry; presentation does not read or write progress.
 
 ## KV keys (`src/store.ts`)
 `oauth` (Tokens JSON), `userId`, `status` (`Status` JSON), `paused_until` (epoch ms string),

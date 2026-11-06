@@ -33,13 +33,14 @@ function browser(options: { stored?: string; suffix?: string; blocked?: boolean;
   const sandbox=vm.createContext({URL,URLSearchParams,crypto,Uint8Array,stored:options.stored || null,blocked:!!options.blocked});
   vm.runInContext(`
     class Element {
-      constructor(){this.listeners={};this.hidden=false;this.textContent='';this.attrs={};this.clientHeight=400;this.scrollTop=0;this.src='';this.href='';this.currentTime=0;this.duration=100;this.paused=true;this.readyState=0;this.muted=true;this.playbackRate=1;this.defaultPlaybackRate=1;this.seeking=false;this.loads=0;this.plays=0;}
+      constructor(){this.classList={values:new Set(),contains(value){return this.values.has(value)},toggle(value,on){if(on)this.values.add(value);else this.values.delete(value)}};this.listeners={};this.hidden=false;this.textContent='';this.attrs={};this.clientHeight=400;this.scrollTop=0;this.src='';this.href='';this.currentTime=0;this.duration=100;this.paused=true;this.readyState=0;this.muted=true;this.playbackRate=1;this.defaultPlaybackRate=1;this.seeking=false;this.loads=0;this.plays=0;}
       addEventListener(name,fn){(this.listeners[name] ||= []).push(fn)}
       removeEventListener(name,fn){this.listeners[name]=(this.listeners[name]||[]).filter(f=>f!==fn)}
-      emit(name,event={}){for(const fn of this.listeners[name]||[])fn(event)}
+      emit(name,event={}){for(const fn of this.listeners[name]||[])fn({target:this,...event})}
       setAttribute(name,value){this.attrs[name]=value}
       removeAttribute(name){delete this.attrs[name];if(name==='src')this.src=''}
       contains(value){return value===this}
+      querySelectorAll(){return []}
       focus(){document.activeElement=this}
       closest(){return null}
       pause(){this.paused=true;this.emit('pause')}
@@ -47,7 +48,7 @@ function browser(options: { stored?: string; suffix?: string; blocked?: boolean;
       load(){this.loads++;this.readyState=0;this.currentTime=0;this.playbackRate=this.defaultPlaybackRate;this.emit('ratechange')}
     }
     var elements={};
-    var document=new Element();document.getElementById=id=>elements[id] ||= new Element();document.hidden=false;document.activeElement=null;
+    var document=new Element();document.getElementById=id=>elements[id] ||= new Element();document.hidden=false;document.activeElement=null;document.body=new Element();
     var window=new Element(), frames=[],timeouts=[];
     var requestAnimationFrame=fn=>frames.push(fn);
     var setTimeout=fn=>timeouts.push(fn),clearTimeout=()=>{};
@@ -136,4 +137,29 @@ test('settled swipes work after native focus but cannot switch during an active 
   f.run("window.emit('pointerup');elements['reels-track'].emit('scrollend')");
   assert.match(f.run('history.urls.at(-1)'),/at=10002/);
   assert.equal(f.run("document.activeElement===elements['reels-video']"),true);
+});
+
+test('immersive layout preserves media and session while tap hides controls through transient buffering', () => {
+  const f=browser({suffix:'&at=10001'});
+  f.run("elements['reels-video'].currentTime=27;elements['reels-video'].muted=false;elements['reels-video'].playbackRate=1.5");
+  const before=f.run("JSON.stringify({src:elements['reels-video'].src,time:elements['reels-video'].currentTime,paused:elements['reels-video'].paused,muted:elements['reels-video'].muted,speed:elements['reels-video'].playbackRate,loads:elements['reels-video'].loads,url:history.urls.at(-1)})");
+  f.run("elements['reels-fullscreen'].emit('click');framesDone()");
+  assert.equal(f.run("elements['reels-video'].controls"),false);
+  assert.equal(f.run("JSON.stringify({src:elements['reels-video'].src,time:elements['reels-video'].currentTime,paused:elements['reels-video'].paused,muted:elements['reels-video'].muted,speed:elements['reels-video'].playbackRate,loads:elements['reels-video'].loads,url:history.urls.at(-1)})"),before);
+  f.run("elements['reels-root'].emit('pointerdown',{target:elements['reels-video'],pointerId:1,clientX:10,clientY:10,timeStamp:0,isPrimary:true,button:0});window.emit('pointerup',{target:elements['reels-video'],pointerId:1,clientX:10,clientY:10,timeStamp:100,isPrimary:true,button:0});elements['reels-video'].emit('waiting')");
+  assert.equal(f.run("elements['reels-root'].classList.contains('overlays-hidden')"),true);
+  f.run("document.emit('keydown',{key:'Escape',preventDefault(){}});framesDone()");
+  assert.equal(f.run("elements['reels-video'].controls"),true);
+  assert.equal(f.run("JSON.stringify({src:elements['reels-video'].src,time:elements['reels-video'].currentTime,paused:elements['reels-video'].paused,muted:elements['reels-video'].muted,speed:elements['reels-video'].playbackRate,loads:elements['reels-video'].loads,url:history.urls.at(-1)})"),before);
+});
+
+test('root fullscreen allows settled swipes and F controls the containing mode from the video', () => {
+  const f=browser({suffix:'&at=10001'});
+  f.run("elements['reels-video'].requestFullscreen=()=>{throw Error('video-only fullscreen forbidden')};document.emit('keydown',{key:'f',target:elements['reels-video'],preventDefault(){}});framesDone()");
+  assert.equal(f.run("elements['reels-root'].classList.contains('is-immersive')"),true);
+  f.run("document.fullscreenElement=elements['reels-root'];document.emit('fullscreenchange');elements['reels-track'].scrollTop=800;elements['reels-track'].emit('scrollend');framesDone()");
+  assert.match(f.run('history.urls.at(-1)'),/at=10002/);
+  f.run("document.emit('keydown',{key:'Escape',target:{closest:()=>true},preventDefault(){}})");
+  assert.equal(f.run("elements['reels-root'].classList.contains('is-immersive')"),false);
+  assert.equal(f.run("document.activeElement===elements['reels-fullscreen']"),true);
 });
