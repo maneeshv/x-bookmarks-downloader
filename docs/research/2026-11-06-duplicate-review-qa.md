@@ -21,3 +21,6 @@ Native Arc used the real request handler with FakeD1/KV/R2, synthetic owner JWTs
 Remote-binding D1/R2 probe: 16 checked objects, 16 explicit MD5s, zero size drift, six matching pairs, 772,660,142 potentially redundant bytes. Two equal-size pairs differ by MD5. No video bodies were downloaded. This is separate from browser QA and does not test production deletion.
 
 Live source/settings preflight passed after transient Workers API 503s recovered. Baseline code matches live source after generated-name/path normalization; live owner/access/resource bindings are preserved. See STATUS/JOURNAL for publication and deployment outcome.
+
+## Release verification
+Implementation `d61d073` deployed as `4b83031c-6e62-43b9-b17f-47c13f388ce8`, verified at 100% traffic. Fetched source byte-matches the dry-run release bundle. Live bindings/vars match deployment config; Access returns 302 for signed-out `/duplicates`, workers.dev returns 404. Native browser reached Cloudflare sign-in, so authenticated production UI remains unverified. PR: https://github.com/maneeshv/x-bookmarks-downloader/pull/39.

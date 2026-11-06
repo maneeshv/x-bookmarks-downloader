@@ -71,8 +71,8 @@ Excluded categories partition live downloaded ineligible rows in order: multi-vi
 - [x] Use Wrangler remote bindings for a read-only MD5 probe on existing objects (no video-body downloads); compare a known matching pair and same-size/different-ETag pair. Record checksum evidence without tokens or secrets. Cleanup cannot launch if MD5 availability is unverified.
 - [x] Run `npm run check`; inspect desktop and mobile local UI with synthetic fixtures, including scan, selection, no automatic media download, deletion success/failure and owner/viewer differences. No production deletion test.
 - [x] Independent spec/security/quality review of the complete diff; fix actionable findings and rerun affected checks.
-- [ ] Update ARCHITECTURE, JOURNAL, STATUS and this checklist. Commit code and docs together with conventional commit subject; push current feature branch, create PR against main using the GitHub tool and relevant validation evidence.
-- [ ] Deploy with verified ignored config and preserved owner/access bindings. Verify deployment ID/traffic, custom-domain Access behavior and disabled workers.dev; authenticated read-only browser smoke if available. Record rollback version and owner test URL. Amend release docs and push follow-up commit if needed.
+- [x] Update ARCHITECTURE, JOURNAL, STATUS and this checklist. Commit code and docs together with conventional commit subject; push current feature branch, create PR against main using the GitHub tool and relevant validation evidence.
+- [x] Deploy with verified ignored config and preserved owner/access bindings. Verify deployment ID/traffic, custom-domain Access behavior and disabled workers.dev; authenticated read-only browser smoke if available. Record rollback version and owner test URL. Amend release docs and push follow-up commit if needed.
 
 ## Execution evidence
 
@@ -82,3 +82,5 @@ Excluded categories partition live downloaded ineligible rows in order: multi-vi
 - Integrated verification: `npm run check` passed both TypeScript projects, all 126 tests and session gate. Independent final review found no actionable issues; its duplicate suite passed 29/29.
 - Browser QA: real handler with resettable local fakes, desktop and 320/390px iframes; manual scan, no initial media request, explicit selection, two sequential synthetic deletions, playback, empty state and synthetic 503 cleanup failure passed. See [QA report](../../research/2026-11-06-duplicate-review-qa.md).
 - Production preflight: 16/16 candidate HEADs exposed MD5, six matching pairs, 772,660,142 potential redundant bytes, zero size drift. Active pre-release version is `92b1c6a8-8095-4373-9d8b-e8f9c0ca7df5` at 100%. Live source matches the committed baseline after normalizing source-path comments and the generated default-export name. Verified all resource bindings/vars; restored missing local OWNER_EMAIL from the live binding. No migration.
+
+- Release: implementation `d61d073`, [PR #39](https://github.com/maneeshv/x-bookmarks-downloader/pull/39), Worker `4b83031c-6e62-43b9-b17f-47c13f388ce8` at 100%. Fetched source exactly matches dry-run release bundle. `/duplicates` signed-out Access 302; workers.dev 404. Rollback `92b1c6a8-8095-4373-9d8b-e8f9c0ca7df5`. Authenticated production browser smoke unavailable (Cloudflare sign-in); owner can test https://xrender.uk/duplicates. No production cleanup performed.
