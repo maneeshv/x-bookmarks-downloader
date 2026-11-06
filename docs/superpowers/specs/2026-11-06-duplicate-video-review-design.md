@@ -1,5 +1,5 @@
 # Library duplicate video review
-Date: 2026-11-06 | Status: PROPOSED
+Date: 2026-11-06 | Status: APPROVED (owner: "Implement it. Commit, push and raise a PR. Also deploy the changes for me to test", 2026-11-06)
 
 ## Goal
 
@@ -8,7 +8,7 @@ video files, play each copy, select a keeper, and permanently remove selected re
 entries to reclaim storage. Detection uses existing metadata and does not fetch video bodies.
 
 This spec formalizes the Opus 5.5 / GPT-6.1-Sol committee recommendation. The owner requested
-the spec on 2026-11-06; implementation and deployment have not been approved.
+the spec on 2026-11-06 and approved implementation, publication, and deployment on 2026-11-06.
 
 ## Evidence and constraints
 
@@ -220,5 +220,5 @@ and focused Store/route/UI coverage. A focused `src/duplicates.ts` may hold chec
 if it keeps the existing large modules readable; use absolute imports. No unrelated refactor.
 
 On owner approval, record an ADR for this matching/cleanup boundary and write an implementation
-plan with TDD and the read-only production checksum verification step. Keep this document
-PROPOSED until approval; the deferred approval is tracked in [QUESTIONS](../../QUESTIONS.md).
+plan with TDD and the read-only production checksum verification step. Owner approval was
+received on 2026-11-06; this spec is frozen after that approval.

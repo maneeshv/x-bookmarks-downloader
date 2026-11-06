@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 
 export type Scripted = { status: number; body?: unknown; headers?: Record<string, string>; bodyBytes?: Uint8Array };
@@ -53,7 +54,7 @@ export class FakeR2 {
   objects = new Map<string, { bytes: Uint8Array; customMetadata: Record<string, string>; contentType: string; uploaded: Date }>();
   async head(key: string) {
     const o = this.objects.get(key);
-    return o ? { key, size: o.bytes.byteLength, customMetadata: o.customMetadata } : null;
+    return o ? { key, size: o.bytes.byteLength, customMetadata: o.customMetadata, checksums: { md5: Uint8Array.from(createHash("md5").update(o.bytes).digest()).buffer } } : null;
   }
   async put(key: string, body: ReadableStream | ArrayBuffer | Uint8Array | string, opts: any = {}) {
     if (opts.onlyIf?.etagDoesNotMatch === "*" && this.objects.has(key)) return null;

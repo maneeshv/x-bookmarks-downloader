@@ -38,3 +38,9 @@ Everything the agent needs to *know* is in the repo (`CLAUDE.md`, `docs/`). This
 
 ## Not required
 Any other plugin on the owner's machine (`ponytail`, `codex`, `atlassian`, `posthog`, `sentry`, …) is personal tooling. `CLAUDE.md` does not depend on them.
+
+## Native browser fallback (2026-11-06)
+If browser-extension inventory reports an unavailable Codex auth token, native Arc through
+`cua.getApp("Arc")` can still support local QA. Rebind the app after a tool-session reset before
+input; use fresh accessibility state and screenshots. This does not provide an authenticated
+production session or justify claiming production UI verification.

@@ -6,14 +6,12 @@ Curated, topic-grouped facts a future session could re-trip on. Not a log: JOURN
 - 2026-08-29: Bookmarks endpoint returns only the **800 most recent** bookmarks and every read is billed — anything not recorded when first seen may be unrecoverable. Source: `docs/research/2026-08-29-x-api-v2.md`. Baked into: ADR-0007; `src/limits.ts` (`BACKFILL_MAX_ITEMS`).
 - 2026-08-29: Reads are deduplicated per 24 h UTC day per Post, so polling cadence barely affects cost (≈ $0.70/mo). The cheaper "Owned Reads" rate may **not** yet apply to bookmarks ($0.005 instead of $0.001) — check the first console usage report. Source: `docs/research/2026-08-29-x-api-v2.md`. Baked into: spec §6/§9; not verified in production yet.
 
-- 2026-10-31: A `/backfill` request canceled mid-run (client disconnect, see https://developers.cloudflare.com/workers/platform/limits/ Duration) leaves every bookmark it had not yet reached **unrecorded**, not pending, because `sync()` writes a row only after processing it. "0 pending" therefore does not prove nothing is missing. Source: production D1/KV check 2026-10-31. Baked into: `src/sync.ts` save-first backfill + `test/sync.test.ts` (ADR-0023), not yet deployed — delete this line after deploy.
 
 ## X media
 - 2026-08-29: `video.twimg.com/*.mp4` URLs are fetchable **anonymously** (no auth), expose `Content-Length` and `Accept-Ranges`. Live-tested with curl. Source: `docs/research/2026-08-29-persona-x-scraper.md`. Baked into: `src/sync.ts` `download()` relies on it; not commented in code.
 - 2026-08-29: `animated_gif` media variants shape is unverified; parser must tolerate absence. Source: spec §9. Baked into: not yet — watch `src/x.ts` `parseBookmarks`/`selectVariant` if a real `animated_gif` bookmark ever misparses.
 
 ## Cloudflare
-- 2026-11-06: Duplicates must use per-object checksum + size, not D1 size alone (two equal-size production pairs had different ETags). D1 bytes sums siblings and DELETE removes all siblings; restrict v1 cleanup to verified single-video posts. REST list ETag is not the Workers `checksums.md5` field. Source: [duplicate research](research/2026-11-06-duplicate-video-review.md). Baked into: not yet.
 - 2026-08-29: Workers **Free** plan CPU cap is **10 ms per invocation**. Streaming `fetch → R2.put` should be I/O-wait, but it is unspiked; Error 1102 means move to Workers Paid (owner approved, Q5). Source: https://developers.cloudflare.com/workers/platform/limits/#cpu-time. Baked into: spec §6/§9, ADR-0008; not verified against a real large download yet.
 
 ## Tooling (Claude Code on this repo)

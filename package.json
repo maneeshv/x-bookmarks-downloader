@@ -2,7 +2,7 @@
   "name": "x-downloader",
   "private": true,
   "type": "module",
-  "imports": { "#src/*": "./src/*.ts" },
+  "imports": { "#src/*": "./src/*.ts", "#test/*": "./test/*.ts" },
   "scripts": {
     "test": "node --no-warnings --test 'test/**/*.test.ts'",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",

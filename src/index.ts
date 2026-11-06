@@ -1,5 +1,6 @@
 import { verifyAccessJwt } from "#src/access";
-import { renderIndex, renderQueue, renderStats, renderWatch } from "#src/html";
+import { deleteBookmark, scanDuplicates, validateDuplicateResolution, type DuplicateCursor, type DuplicateResolve } from "#src/duplicates";
+import { renderDuplicates, renderIndex, renderQueue, renderStats, renderWatch } from "#src/html";
 import { BACKFILL_MAX_DOWNLOADS, BACKFILL_MAX_POSTERS, DESCRIPTION_MAX, MAX_DOWNLOADS_PER_RUN, MAX_FILE_BYTES, MIN_FILE_BYTES, POST_ID_RE, TAG_MAX, TAGS_MAX, TITLE_MAX, VIDEO_KEY_RE } from "#src/limits";
 import { DEFAULT_LIBRARY_PAGE_SIZE, LIBRARY_PAGE_SIZES, Store, type LibraryQuery, type MetaPatch } from "#src/store";
 import { backfillPosters, sync, type Deps } from "#src/sync";
@@ -24,6 +25,19 @@ function deps(env: AppEnv, f: Fetch): Deps {
 
 const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json" } });
 const html = (s: string) => new Response(s, { headers: { "content-type": "text/html; charset=utf-8" } });
+const privateHeaders = { "cache-control": "private, no-store" };
+const duplicateJson = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...privateHeaders, "content-type": "application/json" } });
+
+function parseDuplicateResolve(body: unknown): DuplicateResolve | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+  const { keep, remove, expected } = body as Record<string, unknown>;
+  if (typeof keep !== "string" || typeof remove !== "string" || !POST_ID_RE.test(keep) || !POST_ID_RE.test(remove) || keep === remove) return null;
+  if (!expected || typeof expected !== "object" || Array.isArray(expected)) return null;
+  const { bytes, md5 } = expected as Record<string, unknown>;
+  if (typeof bytes !== "number" || !Number.isSafeInteger(bytes) || bytes <= 0 || typeof md5 !== "string" || !/^[0-9a-f]{32}$/.test(md5)) return null;
+  return { keep, remove, expected: { bytes, md5 } };
+}
+
 const POSTER_PLACEHOLDER = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 9"><rect width="16" height="9" fill="#171b21"/><path d="m6.5 3 4 1.5v.5l-4 1.5z" fill="#59616d"/></svg>`;
 
 // R2 (and miniflare) populate obj.range unconditionally on a GET — even a plain request
@@ -128,6 +142,8 @@ function parseLibraryQuery(url: URL): LibraryQuery {
 
 export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promise<Response> {
   const url = new URL(req.url);
+  const duplicatePath = ["/duplicates", "/api/duplicates/scan", "/api/duplicates/resolve"].includes(url.pathname);
+  const forbidden = () => duplicatePath ? duplicateJson({ error: "forbidden" }, 403) : new Response("forbidden", { status: 403 });
   // Every route, including the OAuth callback, sits behind Access (spec §4); the JWT check defends a misconfigured policy.
   const jwt = req.headers.get("cf-access-jwt-assertion");
   let email = "";
@@ -137,13 +153,40 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
     if (typeof identity.email !== "string" || !identity.email.trim()) throw new Error("missing email");
     email = identity.email.trim();
   }
-  catch { return new Response("forbidden", { status: 403 }); }
+  catch { return forbidden(); }
   const isOwner = !!env.OWNER_EMAIL?.trim() && email.toLowerCase() === env.OWNER_EMAIL.trim().toLowerCase();
   const viewerPath = url.pathname === "/" || /^\/watch\/[^/]+$/.test(url.pathname) || /^\/(?:v|p)\/[^/]+$/.test(url.pathname);
-  if (!isOwner && (req.method !== "GET" || !viewerPath)) return new Response("forbidden", { status: 403 });
+  if (!isOwner && (req.method !== "GET" || !viewerPath)) return forbidden();
 
   const d = deps(env, f);
   const { store } = d;
+  if (duplicatePath) {
+    try {
+      if (url.pathname === "/duplicates") {
+        if (req.method !== "GET") return duplicateJson({ error: "method_not_allowed" }, 405);
+        return new Response(renderDuplicates(), { headers: { ...privateHeaders, "content-type": "text/html; charset=utf-8" } });
+      }
+      if (url.pathname === "/api/duplicates/scan") {
+        if (req.method !== "GET") return duplicateJson({ error: "method_not_allowed" }, 405);
+        const sizes = url.searchParams.getAll("afterBytes"), ids = url.searchParams.getAll("afterPostId");
+        let cursor: DuplicateCursor | null = null;
+        if (sizes.length || ids.length) {
+          const bytes = Number(sizes[0]);
+          if (sizes.length !== 1 || ids.length !== 1 || !/^[0-9]+$/.test(sizes[0]!) || !Number.isSafeInteger(bytes) || bytes <= 0 || !POST_ID_RE.test(ids[0]!)) return duplicateJson({ error: "invalid_cursor" }, 400);
+          cursor = { bytes, postId: ids[0]! };
+        }
+        return duplicateJson(await scanDuplicates(store, cursor));
+      }
+      if (req.method !== "POST") return duplicateJson({ error: "method_not_allowed" }, 405);
+      if (req.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() !== "application/json") return duplicateJson({ error: "json_only" }, 415);
+      const body = parseDuplicateResolve(await req.json().catch(() => null));
+      if (!body) return duplicateJson({ error: "invalid_request" }, 400);
+      const victim = await validateDuplicateResolution(store, body);
+      if (!victim) return duplicateJson({ error: "duplicate_changed_or_unsafe" }, 409);
+      await deleteBookmark(store, victim);
+      return new Response(null, { status: 204, headers: privateHeaders });
+    } catch { return duplicateJson({ error: "operation_failed" }, 500); }
+  }
   if (url.pathname === "/api/videos/retry-all") {
     // Matched before the :id pattern (it would read "retry-all" as a post id → 404). Same JSON-only rule as the other POSTs.
     if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
@@ -170,15 +213,9 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
       return new Response(null, { status: (await store.retry(id, new Date().toISOString())) ? 204 : 404 });
     }
     if (req.method === "DELETE") {
-      // ponytail: a cron tick between deleteVideos and markDeleted can re-download the object under the tombstone; a repeat DELETE (row is still 'downloaded') cleans it up.
-      // R2 first, tombstone second (spec §5): a tombstone must never exist for a video still in R2.
-      // A repeat delete is a 204: the row is still `downloaded`, and R2 delete ignores missing keys.
       const b = await store.getBookmark(id);
       if (b?.status !== "downloaded") return new Response("not found", { status: 404 });
-      await store.deleteVideos(id);
-      await store.markDeleted(id, new Date().toISOString());
-      // Keep the KV storage counter (and the 9 GB alert in sync.ts) honest; only the first delete of a row counts.
-      if (!b.deleted_at) await store.patchStatus({ totalBytes: Math.max(0, ((await store.getStatus()).totalBytes ?? 0) - (b.bytes ?? 0)) });
+      await deleteBookmark(store, b);
       return new Response(null, { status: 204 });
     }
     if (req.method === "POST") {

@@ -70,3 +70,7 @@ The parent corrected the assumption that the library is capped at 800 rows: that
 Expected implementation surface: `src/store.ts`, `src/index.ts`, `src/html.ts`, `test/fakes.ts`, focused Store/route tests, and project docs. FakeR2 needs checksum metadata. Tests should cover unequal hashes at equal size, missing hashes/objects, exclusion and sibling checks, keeper disappearance, owner-only access, once-only accounting, partial failures, and scan continuation across group boundaries.
 
 A re-encoded, cropped, or otherwise byte-different copy will not match MD5. Filenames and duration/text are hints, not deletion evidence. Perceptual matching, media identity persistence, automatic download deduplication, shared objects/reference counting, per-attachment deletion, and metadata merging are separate larger changes. No ADR or implementation plan is approved by this investigation.
+
+## Production MD5 verification — 2026-11-06 implementation follow-up
+
+A read-only Wrangler remote-binding probe ran D1 candidate selection and R2 HEAD on all 16 equal-size candidate objects. All 16 exposed explicit 16-byte `checksums.md5`; all actual sizes matched D1. Six pairs matched both MD5 and size; the other two equal-size pairs had different MD5s. Potential redundant video bytes: **772,660,142** (about 773 MB). This supersedes the earlier ETag-only limitation for these objects. No video bodies were downloaded and no production rows/objects were changed. Results are a point-in-time observation, not a promise that later scans return the same groups.
