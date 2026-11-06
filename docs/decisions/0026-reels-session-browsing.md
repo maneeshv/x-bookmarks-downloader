@@ -1,4 +1,4 @@
-# 0024. Reels as an additive, read-only browsing session
+# 0026. Reels as an additive, read-only browsing session
 Date: 2026-11-06 | Status: DECIDED | Supersedes: — | Evidence: [spec](../superpowers/specs/2026-11-06-reels-view-design.md), [committee](../research/2026-11-06-reels-feasibility.md)
 
 ## Context

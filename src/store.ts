@@ -1,5 +1,6 @@
-import { DEFAULT_MAX_FILE_BYTES, MAX_FILE_BYTES, MIN_FILE_BYTES, REELS_MAX_ITEMS, TITLE_MAX } from "#src/limits";
+import { DEFAULT_MAX_FILE_BYTES, DUPLICATE_SCAN_LIMIT, MAX_FILE_BYTES, MIN_FILE_BYTES, REELS_MAX_ITEMS, TITLE_MAX } from "#src/limits";
 import type { ReelItem } from "#src/reels-state";
+import type { DuplicateCursor, DuplicateScan } from "#src/duplicates";
 import type { Tokens } from "#src/x";
 
 export type BookmarkStatus = "no_video" | "pending" | "downloaded" | "failed";
@@ -52,6 +53,20 @@ const libraryFilter = ({ q, fav, tags }: LibraryQuery): { where: string; args: u
   }
   return { where: clauses.join(" AND "), args };
 };
+
+// Candidate membership is computed over all eligible rows, before applying a continuation cursor.
+const DUPLICATE_ROWS = `WITH classified AS (
+  SELECT *, CASE
+    WHEN r2_key GLOB post_id || '-[0-9]*.mp4' THEN 'multiVideo'
+    WHEN error IS NOT NULL THEN 'error'
+    WHEN r2_key IS NULL OR r2_key != post_id || '.mp4' THEN 'invalidKey'
+    WHEN bytes IS NULL OR typeof(bytes) != 'integer' OR bytes <= 0 OR bytes > 9007199254740991 THEN 'unknownSize'
+    ELSE NULL END AS exclusion
+  FROM bookmarks WHERE status = 'downloaded' AND deleted_at IS NULL
+), eligible AS (SELECT * FROM classified WHERE exclusion IS NULL),
+candidate_sizes AS (SELECT bytes FROM eligible GROUP BY bytes HAVING COUNT(*) > 1)`;
+
+const THUMBNAIL_ELIGIBLE = "status = 'downloaded' AND deleted_at IS NULL AND error IS NULL AND r2_key = post_id || '.mp4'";
 
 // R2 head(key) is the download truth (ADR-0003); D1 is the index (ADR-0007); KV is small mutable state.
 const UPSERT = `INSERT INTO bookmarks (post_id, first_seen_at, posted_at, text, post_url, has_video, status, error, r2_key, bytes, duration_ms, preview_url, updated_at)
@@ -158,6 +173,35 @@ export class Store {
       durationMs: typeof r.durationMs === "number" && Number.isFinite(r.durationMs) && r.durationMs >= 0 ? r.durationMs : null,
       hasPoster: !!r.hasPoster,
     }));
+  }
+  async listDuplicateCandidates(cursor: DuplicateCursor | null): Promise<BookmarkRow[]> {
+    const after = cursor ? "AND (bytes > ? OR (bytes = ? AND post_id > ?))" : "";
+    const args = cursor ? [cursor.bytes, cursor.bytes, cursor.postId] : [];
+    const { results } = await this.db.prepare(`${DUPLICATE_ROWS}
+      SELECT * FROM eligible WHERE bytes IN (SELECT bytes FROM candidate_sizes) ${after}
+      ORDER BY bytes ASC, post_id ASC LIMIT ?`).bind(...args, DUPLICATE_SCAN_LIMIT + 1).all<BookmarkRow & { exclusion?: null }>();
+    return results.map(({ exclusion: _exclusion, ...row }) => row);
+  }
+  async listThumbnailCandidates(after: string | null): Promise<BookmarkRow[]> {
+    const { results } = await this.db.prepare(`SELECT * FROM bookmarks WHERE ${THUMBNAIL_ELIGIBLE}
+      ${after ? "AND post_id > ?" : ""} ORDER BY post_id ASC LIMIT ?`)
+      .bind(...(after ? [after] : []), DUPLICATE_SCAN_LIMIT + 1).all<BookmarkRow>();
+    return results;
+  }
+  async countThumbnailCandidates(): Promise<number> {
+    const row = await this.db.prepare(`SELECT COUNT(*) AS n FROM bookmarks WHERE ${THUMBNAIL_ELIGIBLE}`).first<{ n: number }>();
+    return row?.n ?? 0;
+  }
+  async countDuplicates(): Promise<DuplicateScan["counts"]> {
+    const row = await this.db.prepare(`${DUPLICATE_ROWS}
+      SELECT COUNT(*) FILTER (WHERE exclusion IS NULL) AS eligible,
+        COUNT(*) FILTER (WHERE exclusion IS NULL AND bytes IN (SELECT bytes FROM candidate_sizes)) AS candidates,
+        COUNT(*) FILTER (WHERE exclusion = 'multiVideo') AS multiVideo,
+        COUNT(*) FILTER (WHERE exclusion = 'error') AS error,
+        COUNT(*) FILTER (WHERE exclusion = 'invalidKey') AS invalidKey,
+        COUNT(*) FILTER (WHERE exclusion = 'unknownSize') AS unknownSize
+      FROM classified`).first<{ eligible: number; candidates: number; multiVideo: number; error: number; invalidKey: number; unknownSize: number }>();
+    return { eligible: row?.eligible ?? 0, candidates: row?.candidates ?? 0, excluded: { multiVideo: row?.multiVideo ?? 0, error: row?.error ?? 0, invalidKey: row?.invalidKey ?? 0, unknownSize: row?.unknownSize ?? 0 } };
   }
   async listTags(): Promise<TagOption[]> {
     const { results } = await this.db

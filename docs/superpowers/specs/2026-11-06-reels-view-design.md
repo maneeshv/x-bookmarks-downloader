@@ -4,6 +4,8 @@ Date: 2026-11-06 | Status: APPROVED FOR IMPLEMENTATION
 
 Evidence: [committee investigation](../../research/2026-11-06-reels-feasibility.md).
 Scope: detailed product and technical design; implementation and deployment are separate work.
+
+Deployment authorization update (2026-11-06): the owner authorized deploying the implemented Reels view for hands-on testing, preserving the already-live duplicate/thumbnail features. Physical-device acceptance remains pending and must not be reported as passed from desktop emulation.
 The owner approved the proposed defaults and visual previews on 2026-11-06 and authorized build,
 test, commit, push and PR. Deployment is explicitly excluded. Physical-device validation remains a
 release gate; the approved build may proceed to a reviewable PR with that gate clearly recorded.

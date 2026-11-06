@@ -1,6 +1,6 @@
 # Reels view implementation plan
 
-> **For agentic workers:** Use superpowers:subagent-driven-development. Execute the checked tasks in this worktree; do not deploy.
+> **For agentic workers:** Use superpowers:subagent-driven-development. Original build tasks completed in this worktree. The owner separately authorized deployment for hands-on testing on 2026-11-06; preserve already-live thumbnail work.
 
 **Goal:** Add the approved Reels view, preserve Library/Watch, verify it locally, commit, push and open a PR.
 
@@ -21,7 +21,7 @@
 
 ## Task 1: Approval, bounds and shared state
 
-**Files:** spec, ADR-0024, STATUS/QUESTIONS; `src/reels-state.ts`, `test/reels-state.test.ts`.
+**Files:** spec, ADR-0026, STATUS/QUESTIONS; `src/reels-state.ts`, `test/reels-state.test.ts`.
 
 - [x] Embed both approved previews and record approved defaults and remaining physical-device release gate.
 - [x] Measure eligible production count/projected bytes read-only where available and synthetic 1,000/1,001 bounds. Record evidence, no raw titles.
@@ -69,3 +69,12 @@
 - 2026-11-06: State/backend/final reviews complete, material findings fixed. Final local check: 136 tests, both typechecks, dry-run bundle VM check and session gate pass. Built-worker Chrome acceptance script passes all 25 checks. Actual phones remain a release gate.
 
 - 2026-11-06: Published commit `2a655e9` on `feat/reels-view`, [PR #40](https://github.com/maneeshv/x-bookmarks-downloader/pull/40). No merge/deploy; physical-device gate remains.
+
+## Authorized deployment follow-up — 2026-11-06
+
+- [x] Verify live thumbnail version/source/config and integrate PR #39 into PR #40.
+- [x] Preserve live ADRs 24/25; renumber Reels ADR to26.
+- [x] Run combined typechecks, 171 tests, bundle check, and independent source review.
+- [ ] Complete combined browser verification, commit/push, and deploy with live settings preserved.
+- [ ] Verify exact served source, 100% version traffic, domain/cron/privacy and document evidence.
+- [ ] Owner completes signed-in physical-phone acceptance; this is the purpose of the authorized testing deployment.

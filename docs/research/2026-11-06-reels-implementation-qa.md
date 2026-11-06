@@ -1,7 +1,7 @@
 # Reels implementation verification
 
 Date: 2026-11-06. [Spec](../superpowers/specs/2026-11-06-reels-view-design.md),
-[plan](../superpowers/plans/2026-11-06-reels-view.md), ADR-0024.
+[plan](../superpowers/plans/2026-11-06-reels-view.md), ADR-0026.
 
 ## Baseline and sizing
 
@@ -17,15 +17,14 @@ The exact implementation serializer and synthetic boundary checks are covered by
 
 Sources: Wrangler execute syntax checked through Context7 `/cloudflare/workers-sdk` and
 [execute source](https://github.com/cloudflare/workers-sdk/blob/main/packages/wrangler/src/d1/execute.ts).
-No migration, production metadata write or deploy was performed.
+During the original build, no migration, production metadata write or deploy was performed.
 
 ## Verification scope
 
 Browser fixtures
 use the actual request handler with in-memory D1/KV/R2 and synthetic media, never production tokens.
 Real iOS Safari/Android Chrome, physical touch/native scrubbing and device audio carry-over cannot
-be certified by desktop emulation; those remain required before release. The owner authorized the
-reviewable build/PR and explicitly excluded deployment.
+be certified by desktop emulation; those remain required before release. The original build authorization excluded deployment. On 2026-11-06 the owner separately authorized deployment for hands-on testing; physical-device acceptance remains pending.
 
 ## Automated and browser results
 
@@ -58,7 +57,7 @@ reviewable build/PR and explicitly excluded deployment.
 Source tests passed, but Wrangler's default name preservation injected `__name` into serialized client
 factories. The new bundle smoke check reproduced `ReferenceError: __name is not defined`; setting
 `keep_names=false` made the check pass. The final browser run uses that actual built Worker, not just
-source modules. This is encoded in the example configuration and CI under ADR-0024.
+source modules. This is encoded in the example configuration and CI under ADR-0026.
 
 Two QA harness corrections were required: choose the active session by its `rs` (the storage holds
 three records), and clear storage while on Details (clearing it on Reels is immediately followed by
@@ -90,4 +89,12 @@ No browser dependency is added to package manifests. CDP methods checked through
 Physical iOS Safari and Android Chrome: native touch scrubbing, swipe/reversal, unmute carry-over,
 fullscreen/orientation, screen-reader focus, actual long/high-bitrate files and constrained-network
 first-frame/bytes measurements. Desktop emulation and short fixtures do not establish those results.
-No deployment or merge was performed. PR review and physical-device validation must precede release.
+The original build did not deploy or merge. The subsequent authorized testing deployment is recorded below; full physical-device acceptance remains pending.
+
+## Combined testing deployment — 2026-11-06
+
+Owner authorized deployment for hands-on testing, superseding the original no-deploy instruction. Integrated already-live PR #39 (`763ac15`, implementation `3699ff1`) into Reels PR #40. The thumbnail owner confirmed a deployment hold and no newer/live-only changes or migrations. Live version `2002eed9-d2db-4ac7-98d5-530f44514131` was at 100%; fetched source SHA-256 exactly matched the thumbnail release (`ef5f43d6f606e489832a493bd3868b19c79f1bb29df5109d3d7fd358c7fea354`).
+
+Combined validation: both TypeScript projects, 171 tests, dry-run bundle execution, session gate and all 25 Chrome browser checks pass. Independent review compared both parents and approved; thumbnail/duplicate modules are unchanged, and both emitted scan handlers initialize in a VM with no requests on page load. Refreshed responsive screenshots remain readable. Native pause/resize QA initially called pause at readyState=0 before autoplay; a diagnostic confirmed the readiness race, and the harness now waits for actual playback. No production-code change was required.
+
+Local config matches all live vars/resource bindings, domain and cron; restored missing OWNER_EMAIL from live settings without logging the value. keep_names=false remains essential for emitted Reels factories. No migration or production video/data mutation. Deployment version and served-source verification will be recorded after upload.

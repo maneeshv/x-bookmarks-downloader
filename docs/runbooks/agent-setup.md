@@ -38,3 +38,15 @@ Everything the agent needs to *know* is in the repo (`CLAUDE.md`, `docs/`). This
 
 ## Not required
 Any other plugin on the owner's machine (`ponytail`, `codex`, `atlassian`, `posthog`, `sentry`, …) is personal tooling. `CLAUDE.md` does not depend on them.
+
+## Native browser fallback (2026-11-06)
+If browser-extension inventory reports an unavailable Codex auth token, native Arc through
+`cua.getApp("Arc")` can still support local QA. Rebind the app after a tool-session reset before
+input; use fresh accessibility state and screenshots. This does not provide an authenticated
+production session or justify claiming production UI verification.
+
+## Repository publication (2026-11-06)
+GitHub renamed the repository to `maneeshv/x-bookmarks-downloader`; the existing SSH remote
+for `x-video-downloader` redirects and remains usable. Use the canonical name for PRs. If the
+GitHub MCP reports awaiting device authorization/context canceled, check the existing personal
+`gh auth status` and use its authenticated account; no new credential is necessary when it is valid.

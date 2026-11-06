@@ -60,6 +60,8 @@ try{
  const touchRect=await evalJS(`(()=>{document.activeElement?.blur();const r=document.getElementById('reels-track').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height*.75,height:r.height}})()`);
  await c.call('Input.synthesizeScrollGesture',{x:touchRect.x,y:touchRect.y,yDistance:-Math.round(touchRect.height*.75),speed:900,gestureSourceType:'touch'});
  await c.wait(`new URL(location.href).searchParams.get('at')==='61012'`);note('Emulated touch swipe advances one reel');
+ // URL updates before media metadata arrives; pause() on an already-paused unloaded element emits no pause event.
+ await ready();await c.wait(`!document.querySelector('video').paused`);
  await evalJS(`document.querySelector('video').pause()`,true);const paused=await state();
  await c.call('Emulation.setDeviceMetricsOverride',{width:400,height:850,deviceScaleFactor:1,mobile:true});await new Promise(r=>setTimeout(r,300));assert.equal((await state()).paused,true);assert.equal((await state()).id,paused.id);note('Explicit pause survives resize/recenter');
  await c.navigate('/reels?tag=broken');await c.wait(`document.getElementById('reels-status')?.textContent==='This video could not be played.'`);assert.equal(await evalJS(`document.getElementById('reels-retry').hidden`),false);await click('reels-retry');await c.wait(`document.getElementById('reels-status')?.textContent==='This video could not be played.'`);note('Missing media gives retry/reload without silent skip');
