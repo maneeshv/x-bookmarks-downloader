@@ -109,7 +109,7 @@ adds `title` (`TEXT`), `description` (`TEXT`), `favorite` (`INTEGER NOT NULL DEF
 sync never writes it.
 
 ## R2 key scheme
-Key = `VIDEO_KEY_RE` = `/^\d{5,25}(-\d{1,2})?\.mp4$/` — the numeric X media id, `-1`/`-2` suffix
+Key = `VIDEO_KEY_RE` = `/^\d{5,25}(-\d{1,2})?\.mp4$/` — the numeric X post ID, `-1`/`-2` suffix
 for multi-video posts. `customMetadata` on each object: `postId`, `text`, `postUrl`, `postedAt`,
 `previewUrl`, `bitRate` (all stringified; `null` → `""`).
 
