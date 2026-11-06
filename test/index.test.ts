@@ -606,3 +606,85 @@ test("renderQueue estimates download times per cron tick and shows a stalled ban
   assert.match(reauth, /href="\/oauth\/start"/);
   assert.doesNotMatch(reauth, /≈/);
 });
+
+test("Reels admits GET viewers privately, denies unsupported methods and unverified identities", async () => {
+  const a = await seeded();
+  for (const token of [a.jwt, a.viewerJwt]) {
+    const res = await a.as(token, "/reels");
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get("cache-control"), "private, no-store");
+  }
+  for (const method of ["POST", "DELETE", "HEAD", "PATCH"]) {
+    assert.equal((await a.as(a.viewerJwt, "/reels", { method })).status, 403);
+    assert.equal((await a.send("/reels", { method })).status, 405);
+  }
+  assert.equal((await handle(new Request(ORIGIN + "/reels"), a.env, a.f)).status, 403);
+  assert.equal((await a.as(await a.jwtFor(), "/reels")).status, 403);
+});
+
+test("Library Reels entry preserves context and first eligible displayed card; Watch safely returns", async () => {
+  const a = await app();
+  for (let i = 0; i < 13; i++) {
+    const id = String(20000 + i);
+    await a.store.upsertBookmark(dlRow(id, { text: "movie", r2_key: i === 10 ? null : `${id}.mp4` }));
+    await a.store.updateMeta(id, { tags: ["One", "Two"], favorite: true, resume_ms: 15000 }, "2026-11-06");
+  }
+  const query = "q=movie&tag=One&tag=Two&fav=1&sort=oldest&page=2&perPage=10";
+  const library = await (await a.get("/?"+query)).text();
+  const entry = library.match(/data-library-view="reels" href="([^"]+)"/);
+  assert.ok(entry);
+  const target = new URL(entry[1]!.replaceAll("&amp;", "&"), ORIGIN);
+  assert.equal(target.pathname, "/reels");
+  assert.equal(target.searchParams.get("at"), "20011");
+  assert.equal(target.searchParams.get("from"), "20011");
+  assert.equal(target.searchParams.get("page"), "2");
+  assert.deepEqual(target.searchParams.getAll("tag"), ["One", "Two"]);
+  const path = `/watch/20012?${query}&view=reels&from=20011&at=20011&order=shuffle&seed=12345678&rs=${"a".repeat(32)}&returnUrl=https://evil.example`;
+  const watch = await (await a.get(path)).text();
+  const back = new URL(watch.match(/href="([^"]+)">Back to Reels/)! [1]!.replaceAll("&amp;", "&"), ORIGIN);
+  assert.equal(back.pathname, "/reels");
+  assert.equal(back.searchParams.get("at"), "20012");
+  assert.equal(back.searchParams.get("from"), "20011");
+  assert.equal(back.searchParams.get("seed"), "12345678");
+  assert.equal(back.searchParams.get("returnUrl"), null);
+  const deletion = JSON.parse(watch.match(/backToLibrary=("(?:[^"\\]|\\.)*"),availableTags/)! [1]!);
+  assert.equal(deletion, back.pathname + back.search);
+  const libraryBack = new URL(watch.match(/href="([^"]+)">Back to library/)! [1]!.replaceAll("&amp;", "&"), ORIGIN);
+  assert.equal(libraryBack.hash, "#video-20011");
+  assert.equal(libraryBack.searchParams.get("page"), "2");
+  const viewer = await (await a.as(a.viewerJwt, path)).text();
+  assert.match(viewer, /resumeMs=0,save=null/);
+  assert.doesNotMatch(viewer, /id="del"|\/api\/videos\//);
+  await a.store.markDeleted("20012", "2026-11-06");
+  const missing = await a.get(path);
+  assert.equal(missing.status, 404);
+  assert.match(await missing.text(), /Back to Reels/);
+  assert.equal(await (await a.get("/watch/20012")).text(), "not found");
+});
+
+test("Reels capacity covers complete row count and escaped UTF-8 bytes without leaking partial playlist", async () => {
+  const a = await app();
+  for (let i = 0; i < 1000; i++) await a.store.upsertBookmark(dlRow(String(20000+i)));
+  const within = await (await a.get("/reels")).text();
+  assert.doesNotMatch(within, /This selection is too large for Reels/);
+  assert.match(within, /20999/);
+  await a.store.upsertBookmark(dlRow("21000"));
+  const overflow = await a.get("/reels?rs="+"b".repeat(32));
+  assert.equal(overflow.status, 200);
+  const overflowHtml = await overflow.text();
+  assert.match(overflowHtml, /This selection is too large for Reels/);
+  assert.doesNotMatch(overflowHtml, /REELS_ITEMS=|<video|20999/);
+  await a.store.markDeleted("21000", "2026-11-06");
+  for (let i = 0; i < 1000; i++) await a.store.updateMeta(String(20000+i), { title: "<".repeat(200) }, "2026-11-06");
+  assert.match(await (await a.get("/reels")).text(), /This selection is too large for Reels/);
+});
+
+
+test("Reels script data escapes user titles and omits owner metadata", async () => {
+  const a = await seeded();
+  await a.store.updateMeta("12345", { title: "</script><img onerror=evil>", description: "PRIVATE_DESCRIPTION", resume_ms: 45678, tags: ["PRIVATE_TAG"] }, "2026-11-06");
+  const html = await (await a.as(a.viewerJwt, "/reels?from=bad&at=bad&pin=bad&order=evil&seed=BAD&rs=BAD&returnUrl=https://evil.example")).text();
+  assert.doesNotMatch(html, /<\/script><img|PRIVATE_DESCRIPTION|PRIVATE_TAG|45678|returnUrl|https:\/\/evil.example/);
+  assert.match(html, /\\u003c\/script>/);
+  assert.equal(a.f.calls.filter(([url]) => !url.endsWith("/cdn-cgi/access/certs")).length, 0, "Reels must not call X or preload media server-side");
+});

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_MAX_FILE_BYTES, MAX_FILE_BYTES, MIN_FILE_BYTES } from "#src/limits";
+import { DEFAULT_MAX_FILE_BYTES, MAX_FILE_BYTES, MIN_FILE_BYTES, POST_ID_RE, VIDEO_KEY_RE } from "#src/limits";
 import { Store } from "#src/store";
 import { FakeD1, FakeKV, FakeR2 } from "./fakes.ts";
 
@@ -279,4 +279,53 @@ test("retryAll resets every failed row to pending and returns the count; nothing
   }
   assert.equal((await s.getBookmark("4"))!.status, "downloaded");
   assert.equal(await s.retryAll("2026-08-31T00:00:01Z"), 0, "nothing left to retry");
+});
+
+test("Reels SQL eligibility matches key rules before its 1001-row cap", async () => {
+  const { s } = mk();
+  const invalid = [null, "", "1234.mp4", "12345.MP4", "12345-.mp4", "12345-123.mp4", "12345-x.mp4", "12345.mp4\n", "12345.mp4\0evil", "１２３４５.mp4", "12345--1.mp4", "1".repeat(26)+".mp4"];
+  for (let i = 0; i < 1010; i++) await dl(s, String(90000 + i), { r2_key: invalid[i % invalid.length]!, posted_at: "2026-10-01" });
+  await dl(s, "12345", { r2_key: "12345-99.mp4", text: " fallback \n title ", duration_ms: null });
+  await dl(s, "12346", { r2_key: "1".repeat(25)+"-0.mp4", preview_url: "https://example.test/poster" });
+  await dl(s, "bad-id");
+  const items = await s.listReels();
+  assert.deepEqual(items.map((r) => r.postId), ["12346", "12345"]);
+  assert.deepEqual(items[1], { postId: "12345", videoKey: "12345-99.mp4", title: "fallback title", durationMs: null, hasPoster: false });
+  for (let i = 0; i < 1001; i++) await dl(s, String(20000 + i));
+  assert.equal((await s.listReels()).length, 1001);
+});
+
+test("Reels projects bounded metadata using all Library filters and sort orders, ignoring pagination", async () => {
+  const { s } = mk();
+  for (let i = 0; i < 14; i++) {
+    const id = String(20000 + i);
+    await dl(s, id, { text: "movie " + i, posted_at: `2026-08-${String(i+1).padStart(2,"0")}`, bytes: i, duration_ms: i * 1000 });
+    await s.updateMeta(id, { title: "t".repeat(210), description: "private description", tags: ["One", "Two"], favorite: true, resume_ms: 8000 }, "2026-11-06");
+  }
+  for (const sort of ["newest", "oldest", "title", "largest", "smallest", "longest", "shortest"] as const) {
+    const q = { q: "movie", tags: ["one", "two"], fav: true, sort, page: 2, perPage: 10 as const };
+    const items = await s.listReels(q);
+    assert.deepEqual(items.map((r) => r.postId), (await s.listLibrary(q)).map((r) => r.post_id));
+    assert.equal(items.length, 14);
+    assert.equal(items[0]!.title.length, 200);
+    assert.deepEqual(Object.keys(items[0]!).sort(), ["durationMs", "hasPoster", "postId", "title", "videoKey"]);
+  }
+  await s.markDeleted("20000", "2026-11-06");
+  assert.equal((await s.listReels()).length, 13);
+  assert.equal((await s.listReels({ tags: ["missing"] })).length, 0);
+});
+
+
+test("Reels SQL validation agrees with shared post and video regexes", async () => {
+  const { s } = mk();
+  const ids = ["1234", "12345", "0".repeat(25), "1".repeat(26), "12345\n", "12345\0", "１２３４５", "-12345"];
+  const keys = ["12345.mp4", "12345-1.mp4", "12345-99.mp4", "00000-00.mp4", "1".repeat(25)+".mp4", "1".repeat(26)+".mp4", "1234.mp4", "12345.mp4\n", "12345.mp4\0", "１２３４５.mp4", "12345-1x.mp4", "12345-123.mp4", "12345-.mp4", "12345.MP4", "12345.mp4/", "12345-1-1.mp4", ""];
+  for (const id of ids) {
+    await dl(s, id);
+    assert.equal((await s.listReels()).some((r) => r.postId === id), POST_ID_RE.test(id) && VIDEO_KEY_RE.test(id+".mp4"), JSON.stringify(id));
+  }
+  for (const key of keys) {
+    await dl(s, "54321", { r2_key: key });
+    assert.equal((await s.listReels()).some((r) => r.postId === "54321"), VIDEO_KEY_RE.test(key), JSON.stringify(key));
+  }
 });

@@ -1,4 +1,6 @@
-import { CRON_INTERVAL_MS, MAX_DOWNLOADS_PER_RUN, MAX_FILE_BYTES } from "#src/limits";
+import { CRON_INTERVAL_MS, MAX_DOWNLOADS_PER_RUN, MAX_FILE_BYTES, POST_ID_RE, VIDEO_KEY_RE } from "#src/limits";
+import { reelsHref, reelsLibraryHref, type ReelsContext } from "#src/reels-context";
+import { createDuplicateReviewState, createThumbnailReviewState, duplicatesBrowserScript } from "#src/duplicates-ui";
 import { DEFAULT_LIBRARY_PAGE_SIZE, LIBRARY_PAGE_SIZES, type BookmarkRow, type LibraryQuery, type StatRow, type Status, type TagOption } from "#src/store";
 
 const esc = (s: string | null) => (s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
@@ -96,6 +98,10 @@ const pageNumbers = (current: number, total: number): Array<number | "gap"> => {
 };
 
 export function renderIndex(rows: BookmarkRow[], status: Status, q: LibraryQuery = {}, total = rows.length, isOwner = true, availableTags: TagOption[] = [], queueCount = 0): string {
+  const reelsEntry = libraryParams(q);
+  const firstReel = rows.find((r) => POST_ID_RE.test(r.post_id) && r.r2_key && VIDEO_KEY_RE.test(r.r2_key));
+  if (firstReel) { reelsEntry.set("from", firstReel.post_id); reelsEntry.set("at", firstReel.post_id); }
+  const reelsLink = `/reels${reelsEntry.size ? `?${reelsEntry}` : ""}`;
   const pageNumber = q.page ?? 1, perPage = q.perPage ?? DEFAULT_LIBRARY_PAGE_SIZE;
   const selectedTags = q.tags ?? [], selectedKeys = new Set(selectedTags.map((tag) => tag.toLowerCase()));
   const totalPages = Math.max(1, Math.ceil(total / perPage));
@@ -126,8 +132,10 @@ export function renderIndex(rows: BookmarkRow[], status: Status, q: LibraryQuery
   <nav class="rail-nav" aria-label="Library navigation">
     <a class="rail-link" data-library-view="library" href="${esc(link({ fav: false, page: 1 }))}"${!q.fav ? ' aria-current="page"' : ""}>${icon("library")}<span>Library</span></a>
     <a class="rail-link" data-library-view="favourites" href="${esc(link({ fav: true, page: 1 }))}"${q.fav ? ' aria-current="page"' : ""}>${icon("heart")}<span>Favourites</span></a>
+    <a class="rail-link" data-library-view="reels" href="${esc(reelsLink)}">${icon("library")}<span>Reels</span></a>
     ${isOwner ? `<a class="rail-link" href="/stats">${icon("stats")}<span>Stats</span></a>` : ""}
     ${isOwner ? `<a class="rail-link" href="/queue">${icon("clock")}<span>Queue</span>${queueCount ? `<span class="rail-count" aria-label="${queueCount} waiting">${queueCount}</span>` : ""}</a>` : ""}
+    ${isOwner ? `<a class="rail-link" href="/duplicates">${icon("library")}<span>Duplicates</span></a>` : ""}
   </nav>
   <div class="rail-footer">${isOwner ? "" : '<span class="view-only">View only</span>'}
     <span class="sync-label">Last sync ${status.lastRun ? `<time datetime="${esc(status.lastRun)}" title="${esc(status.lastRun)}">${esc(status.lastRun.replace("T", " ").slice(0, 16))} UTC</time>` : "unavailable"}</span>
@@ -174,8 +182,13 @@ trigger.onclick=()=>popover.hidden?open():close();search.oninput=render;search.o
 </script>`, "library-page");
 }
 
-export function renderWatch(r: BookmarkRow, q: LibraryQuery = {}, isOwner = true, availableTags: TagOption[] = []): string {
-  const backToLibrary = libraryHref(q, `#video-${r.post_id}`), deleteReturn = libraryHref(q);
+export function renderWatchUnavailable(reels: ReelsContext): string {
+  return page("Video unavailable", `${appHeader("Video unavailable", "", false)}<main id="content" class="watch-shell"><h1>This video is unavailable.</h1><p><a class="nav-link" href="${esc(reelsHref(reels))}">Back to Reels</a><a class="nav-link" href="${esc(reelsLibraryHref(reels))}">Back to library</a></p></main>`);
+}
+
+export function renderWatch(r: BookmarkRow, q: LibraryQuery = {}, isOwner = true, availableTags: TagOption[] = [], reels?: ReelsContext): string {
+  const backToLibrary = reels ? reelsLibraryHref(reels) : libraryHref(q, `#video-${r.post_id}`);
+  const deleteReturn = reels ? reelsHref({ ...reels, at: r.post_id }) : libraryHref(q);
   const initialTags = tags(r), initialKeys = new Set(initialTags.map((tag) => tag.toLowerCase()));
   const initialChips = initialTags.map((tag) => `<span class="picker-chip"><span>${esc(tag)}</span><button type="button" aria-label="Remove ${esc(tag)}">Remove</button></span>`).join("");
   const initialOptions = availableTags.map(({ tag, count }) => {
@@ -219,7 +232,7 @@ speed.onchange=()=>{v.playbackRate=Number(speed.value)};const stepSpeed=d=>{cons
 const seek=s=>{v.currentTime=Math.min(Math.max(0,v.currentTime+s),v.duration||0)},toggle=()=>v.paused?v.play():v.pause();
 document.addEventListener("keydown",e=>{if(e.metaKey||e.ctrlKey||e.altKey||e.target===v||e.target.closest?.("input,textarea,select,button,a"))return;const act={" ":toggle,k:toggle,j:()=>seek(-10),l:()=>seek(10),arrowleft:()=>seek(-5),arrowright:()=>seek(5),m:()=>{v.muted=!v.muted},f:()=>v.requestFullscreen?v.requestFullscreen():v.webkitEnterFullscreen(),"<":()=>stepSpeed(-1),">":()=>stepSpeed(1)}[e.key.toLowerCase()];if(act){e.preventDefault();act()}})})();
 <\/script>`;
-  return page(title(r), `${appHeader("Watching from your library", `<a class="nav-link" href="${esc(backToLibrary)}">Back to library</a><a class="nav-link desktop-only" href="/v/${esc(r.r2_key)}" download="${esc(r.post_id)}.mp4">Download</a>`, isOwner)}
+  return page(title(r), `${appHeader("Watching from your library", `${reels ? `<a class="nav-link" href="${esc(reelsHref({ ...reels, at: r.post_id }))}">Back to Reels</a>` : ""}<a class="nav-link" href="${esc(backToLibrary)}">Back to library</a><a class="nav-link desktop-only" href="/v/${esc(r.r2_key)}" download="${esc(r.post_id)}.mp4">Download</a>`, isOwner)}
 <main id="content" class="watch-shell">
   <div class="watch-layout">
     <div class="player-wrap"><video controls playsinline preload="metadata" src="/v/${esc(r.r2_key)}"${r.preview_url ? ` poster="/p/${esc(r.post_id)}"` : ""}></video>
@@ -312,4 +325,31 @@ export function renderQueue(queue: { pending: BookmarkRow[]; failed: BookmarkRow
 document.querySelectorAll("[data-retry]").forEach(b=>b.onclick=async()=>{b.disabled=true;const r=await fetch("/api/videos/"+b.dataset.retry+"/retry",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});if(r.ok)location.reload();else{alert("retry failed: "+r.status);b.disabled=false}});
 const ra=document.getElementById("retry-all");if(ra)ra.onclick=async()=>{ra.disabled=true;const r=await fetch("/api/videos/retry-all",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});if(r.ok)location.reload();else{alert("retry all failed: "+r.status);ra.disabled=false}};
 </script>`);
+}
+
+
+export function renderDuplicates(): string {
+  const script = duplicatesBrowserScript.replace("CREATE_STATE", `(${createDuplicateReviewState.toString()})`).replace("CREATE_THUMBNAILS", `(${createThumbnailReviewState.toString()})`);
+  return page("Duplicates", `${appHeader("", '<a class="nav-link" href="/">Library</a>')}
+<main id="content" class="stats-shell duplicates-shell">
+  <header class="stats-heading"><p class="eyebrow">Library maintenance</p><h1>Duplicates</h1><p>Review exact video copies in one place. Choose which copy to keep and remove redundant entries to reclaim storage.</p></header>
+  <p class="d">Find exact matches among successfully downloaded single-video entries using stored checksums. Scanning reads metadata; videos load only when you play them.</p>
+  <div class="duplicate-actions"><button id="duplicate-scan" class="button primary" type="button">Scan for duplicates</button><button id="duplicate-pause" class="button" type="button" hidden>Pause</button><button id="duplicate-rescan" class="button" type="button" hidden>Rescan</button></div>
+  <p id="duplicate-status" role="status" aria-live="polite" aria-atomic="true">No scan started.</p>
+  <p id="duplicate-coverage" class="d">Coverage appears after the first scan batch.</p><p id="duplicate-times" class="d"></p>
+  <details class="duplicate-notice d"><summary>Coverage and deletion limits</summary><p>Only equal-size library entries are checked. Re-encoded videos and multi-video posts are excluded. Stored library sizes can miss matches; this is not a complete inventory of every object. The library can change during a scan. Cleanup checks both copies again, but actions in another tab or an active sync can still race deletion. Deleted metadata is not merged, and deletion has no undo.</p></details>
+  <h2>Confirmed exact-video matches</h2>
+  <div id="duplicate-results"></div><details id="duplicate-unknown" class="stats-section" hidden></details>
+  <section class="stats-section" aria-labelledby="thumbnail-heading">
+    <h2 id="thumbnail-heading">Suggested matches — identical thumbnails</h2>
+    <p class="d">Find entries with the same stored thumbnail, even when video names, sizes or durations differ. Identical thumbnails do not prove duplicate videos. Shared covers or intros can match; compare the videos manually. Multi-video posts are excluded. The library can change during a scan.</p>
+    <div class="duplicate-actions"><button id="thumbnail-scan" class="button" type="button">Scan thumbnails</button><button id="thumbnail-pause" class="button" type="button" hidden>Pause</button><button id="thumbnail-rescan" class="button" type="button" hidden>Rescan thumbnails</button></div>
+    <p id="thumbnail-status" role="status" aria-live="polite" aria-atomic="true">No thumbnail scan started.</p><p id="thumbnail-coverage" class="d"></p>
+    <div id="thumbnail-results"></div><div id="thumbnail-unknown"></div>
+  </section>
+</main>
+<style>
+.duplicates-shell{max-width:1160px;overflow-wrap:anywhere}.duplicates-shell .stats-heading p{max-width:760px}.duplicates-shell [hidden]{display:none!important}.duplicate-actions{display:flex;gap:.65rem;flex-wrap:wrap;align-items:center;margin:1.3rem 0}.duplicate-notice{border-top:1px solid var(--line);padding:1rem 0}.duplicate-group{margin:2rem 0;padding-top:1.5rem;border-top:1px solid var(--line)}.duplicate-group h2{font-size:1.2rem;margin:0 0 .45rem}.duplicate-copies{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:1rem}.duplicate-copy{min-width:0;padding:1rem;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface)}.duplicate-copy video{display:block;width:100%;aspect-ratio:16/9;object-fit:contain;background:#000;border-radius:8px}.duplicate-copy h3{font-size:1rem;margin:.85rem 0 .45rem}.duplicate-copy p{margin:.5rem 0;font-size:.8rem}.duplicate-copy a{color:var(--accent);font-size:.83rem;text-decoration:underline;text-underline-offset:3px}.duplicate-metadata{color:#f3c878}.duplicate-choices{margin-top:.8rem;border-top:1px solid var(--line);padding-top:.6rem}.duplicate-choice{display:flex;gap:.6rem;align-items:center;min-height:44px;font-size:.87rem;cursor:pointer}.duplicate-choice input{width:20px;height:20px;min-height:20px;flex:0 0 auto;padding:0;accent-color:var(--accent)}.duplicates-shell button:focus-visible,.duplicates-shell summary:focus-visible,.duplicates-shell a:focus-visible{outline:2px solid var(--accent);outline-offset:3px}.duplicates-shell button:disabled{opacity:.45;cursor:not-allowed}.duplicate-actions p{margin:0;margin-right:auto}#duplicate-status{font-weight:650}#duplicate-times{font-size:.75rem}.duplicates-shell details summary{cursor:pointer;min-height:44px}@media(max-width:440px){.duplicates-shell{padding-left:1rem;padding-right:1rem}.duplicate-copies{grid-template-columns:minmax(0,1fr)}.duplicate-copy{padding:.8rem}.duplicate-actions .button{max-width:100%;white-space:normal;text-align:center;line-height:1.25}}
+</style>
+<script>${script}</script>`);
 }

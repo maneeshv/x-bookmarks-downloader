@@ -18,6 +18,8 @@ export const BACKFILL_MAX_REQUESTS = 10;            // 800/90 = 9 pages
 export const BACKFILL_MAX_DOWNLOADS = 30;           // ceiling for /backfill?downloads=N (owner-driven drain, 2026-08-30); cron keeps MAX_DOWNLOADS_PER_RUN
 export const TWEET_LOOKUP_BATCH_SIZE = 100;         // GET /2/tweets accepts at most 100 IDs — docs.x.com/x-api/posts/get-posts-by-ids
 export const BACKFILL_MAX_POSTERS = 30;             // ceiling for one D1-backed poster migration page (ADR-0018)
+export const DUPLICATE_SCAN_LIMIT = 100;             // plus one D1 lookahead; metadata only (ADR-0024)
+export const DUPLICATE_HEAD_CONCURRENCY = 4;
 export const MAX_POSTER_BYTES = 5 * 1024 ** 2;      // immutable 5 MiB cap for untrusted X CDN image bodies
 export const STALE_PARSER_RUNS = 30;                // consecutive runs with results but zero media → alert
 export const DOWNLOAD_JITTER_MS: readonly [number, number] = [1000, 2000];
@@ -36,3 +38,7 @@ export const X_SCOPES = "bookmark.read tweet.read users.read offline.access";
 // No author_id / user.fields: may bill as $0.01 user reads (docs/research/2026-08-29-x-api-v2.md)
 export const BOOKMARK_QUERY =
   "expansions=attachments.media_keys&media.fields=media_key,type,variants,preview_image_url,duration_ms&tweet.fields=created_at,text,attachments";
+
+// Complete Reels snapshot limits (ADR-0026); one extra row detects overflow.
+export const REELS_MAX_ITEMS = 1000;
+export const REELS_MAX_PAYLOAD_BYTES = 512 * 1024;
