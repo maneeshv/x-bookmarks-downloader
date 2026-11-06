@@ -22,3 +22,5 @@ Date: 2026-11-06. Approved via Sage: build deterministic approximate thumbnails 
 - [x] Update ADR0028/architecture/JOURNAL/STATUS/QA, inspect CI, commit/push PR39, update PR scope. No deployment/merge. Report commit, tests, calibration and limits.
 
 Verification: `node --no-warnings --test test/perceptual*.test.ts test/duplicates*.test.ts`, `npm run check`, `git diff --check`, `scripts/check-session.sh`. Product writes follow failing tests. Browser caps and threshold are fixed versioned policy, not user-supplied values.
+
+Execution follow-up2026-11-06: owner subsequently authorized approximate deployment for testing, preserving accepted fullscreen Reels, without merging either PR. Combined source61703e1 deployed as318f610d; see STATUS and QA for verified release evidence. Original no-deploy instruction was superseded only for this release, not PR merges.

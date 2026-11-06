@@ -19,3 +19,5 @@ Only independent pairs with previews, video size/duration and Watch links are ac
 Revisit with representative owner-reviewed samples before adjusting thresholds, adding worker decoding/persistent indexes, or supporting broader coverage. Thumbnail-based deletion requires a separate design and authorization. Approximate implementation stays undeployed until explicitly approved.
 
 Sources: [createImageBitmap](https://developer.mozilla.org/en-US/docs/Web/API/Window/createImageBitmap), [Canvas getImageData](https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/getImageData) (Context7 consulted2026-11-06).
+
+Deployment follow-up2026-11-06: owner authorized testing after accepting fullscreen Reels. Combined release61703e1 deployed; PR merge still requires thumbnail acceptance. Algorithm/privacy/delete policy unchanged.
