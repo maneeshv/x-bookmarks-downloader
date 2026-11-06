@@ -87,13 +87,109 @@ export function createReelsController(media: ReelsMedia, hooks: ReelsMediaHooks)
   };
 }
 
+export interface ReelsPresentationPointer {
+  id: number; x: number; y: number; time: number; primary: boolean; button: number; surface: boolean;
+}
+export interface ReelsPresentationHooks {
+  render(active: boolean, visible: boolean): void;
+  focusEntry(): void;
+  fullscreen(): 'root' | 'other' | null;
+  request?: () => Promise<void>;
+  exit?: () => Promise<void>;
+}
+
+/** Presentation has no media/session access: changing layout cannot change playback intent. */
+export function createReelsPresentation(hooks: ReelsPresentationHooks) {
+  let active = false, visible = true, pending = false, exiting = false, native = false;
+  let tap: ReelsPresentationPointer | undefined;
+  const pointers = new Set<number>();
+  const render = () => hooks.render(active, visible);
+  const release = () => {
+    if (hooks.fullscreen() !== 'root' || !hooks.exit || exiting) return;
+    exiting = true; native = false;
+    try { void hooks.exit().then(() => { exiting = false; }, () => { exiting = false; }); }
+    catch { exiting = false; }
+  };
+  const exit = () => {
+    if (!active) return;
+    active = false; visible = true; native = false; tap = undefined; pointers.clear();
+    render(); hooks.focusEntry(); release();
+  };
+  const enter = () => {
+    if (active) return;
+    active = true; visible = true; render();
+    if (!hooks.request || pending || exiting) return;
+    pending = true;
+    try {
+      void hooks.request().then(() => {
+        pending = false;
+        if (!active) release(); else native = !exiting && hooks.fullscreen() === 'root';
+      }, () => { pending = false; });
+    } catch { pending = false; }
+  };
+  return {
+    enter, exit, toggle() { if (active) exit(); else enter(); },
+    active: () => active, visible: () => visible,
+    reveal() { if (active && !visible) { visible = true; render(); } },
+    fullscreenChange() {
+      if (hooks.fullscreen() === 'root') { if (active) native = !exiting; else release(); }
+      else if (native && !exiting) exit();
+    },
+    pointerDown(value: ReelsPresentationPointer) {
+      pointers.add(value.id);
+      if (!active || pointers.size !== 1 || !value.primary || value.button !== 0 || !value.surface) { tap = undefined; return; }
+      tap = value;
+    },
+    pointerMove(value: ReelsPresentationPointer) {
+      if (tap?.id === value.id && Math.hypot(value.x - tap.x, value.y - tap.y) > 10) tap = undefined;
+    },
+    pointerUp(value: ReelsPresentationPointer) {
+      pointers.delete(value.id);
+      if (active && tap?.id === value.id && value.surface && value.time - tap.time < 450 && Math.hypot(value.x - tap.x, value.y - tap.y) <= 10) {
+        visible = !visible; render();
+      }
+      tap = undefined;
+    },
+    pointerCancel(id: number) { pointers.delete(id); tap = undefined; },
+  };
+}
+
 // Browser-only DOM wiring stays plain JavaScript: Worker TypeScript intentionally excludes lib.dom.
 // The media and session algorithms above/alongside this module remain directly executable in tests.
 export const REELS_BROWSER = String.raw`
-(function(items, context, state, urls, createController) {
+(function(items, context, state, urls, createController, createPresentation) {
   const byId = new Map(items.map(item => [item.postId, item]));
   const $ = id => document.getElementById(id);
-  const video = $('reels-video'), track = $('reels-track');
+  const video = $('reels-video'), track = $('reels-track'), root = $('reels-root');
+  const overlays = Array.from(root.querySelectorAll('[data-reels-overlay]'));
+  const presentation = createPresentation({
+    fullscreen: () => document.fullscreenElement === root ? 'root' : document.fullscreenElement ? 'other' : null,
+    request: root.requestFullscreen ? () => root.requestFullscreen() : undefined,
+    exit: document.exitFullscreen ? () => document.exitFullscreen() : undefined,
+    focusEntry: () => $('reels-fullscreen').focus({preventScroll:true}),
+    render(active,visible) {
+      const entering=active && !root.classList.contains('is-immersive');
+      root.classList.toggle('is-immersive',active);
+      root.classList.toggle('overlays-hidden',active && !visible);
+      document.body.classList.toggle('reels-immersive-open',active);
+      video.controls=!active;
+      $('reels-exit-fullscreen').hidden=!active;
+      $('reels-fullscreen').setAttribute('aria-expanded',String(active));
+      if(active && !visible && overlays.some(element => element.contains(document.activeElement))) $('reels-exit-fullscreen').focus({preventScroll:true});
+      for(const element of overlays) { element.hidden=active && !visible; element.inert=active && !visible; }
+      if(entering) $('reels-exit-fullscreen').focus({preventScroll:true});
+      recenter();
+    }
+  });
+  $('reels-fullscreen').addEventListener('click',() => presentation.enter());
+  $('reels-exit-fullscreen').addEventListener('click',() => presentation.exit());
+  document.addEventListener('fullscreenchange',() => presentation.fullscreenChange());
+  root.addEventListener('focusin',event => {if(event.target!==$('reels-exit-fullscreen') && event.target!==video) presentation.reveal();});
+  const pointer = event => ({id:event.pointerId,x:event.clientX,y:event.clientY,time:event.timeStamp,primary:event.isPrimary,button:event.button,surface:event.target === video || event.target === track || event.target.classList.contains('reels-slot')});
+  root.addEventListener('pointerdown',event => presentation.pointerDown(pointer(event)),{capture:true});
+  root.addEventListener('pointermove',event => presentation.pointerMove(pointer(event)),{passive:true});
+  window.addEventListener('pointerup',event => presentation.pointerUp(pointer(event)));
+  window.addEventListener('pointercancel',event => presentation.pointerCancel(event.pointerId));
   const random = bytes => Array.from(crypto.getRandomValues(new Uint8Array(bytes)), n => n.toString(16).padStart(2,'0')).join('');
   const seed = () => { let value; do { value = random(4); } while(value === '00000000'); return value; };
   let storage;
@@ -120,6 +216,7 @@ export const REELS_BROWSER = String.raw`
       $('reels-play').textContent=value==='playing'||value==='buffering'?'Pause':'Play';
       $('reels-retry').hidden=!['error','buffering'].includes(value);
       $('reels-reload').hidden=value!=='error';
+      if(['error','tap'].includes(value)) presentation.reveal();
     }
   });
   function recenter() {
@@ -163,7 +260,7 @@ export const REELS_BROWSER = String.raw`
     if(item) controller.open(item.postId,'/v/'+item.videoKey,session.positions[item.postId] || 0,autoplay,session.muted,session.speed);
   }
   function navigate(delta) {
-    if(document.fullscreenElement || video.webkitDisplayingFullscreen || video.seeking || pointerDown) { recenter(); return; }
+    if((document.fullscreenElement && document.fullscreenElement!==root) || video.webkitDisplayingFullscreen || video.seeking || pointerDown) { recenter(); return; }
     const sequence=state.sequence(session), index=sequence.indexOf(session.currentId), next=sequence[index+delta];
     if(next && next!==session.currentId) {
       controller.capture(); session.currentId=next; session.currentIndex=index+delta; session.paused=false;
@@ -190,6 +287,17 @@ export const REELS_BROWSER = String.raw`
   $('reels-mute').addEventListener('click',() => controller.mute());
   $('reels-speed').addEventListener('change',event => controller.speed(Number(event.target.value)));
   $('reels-retry').addEventListener('click',() => controller.retry());
+  const seek=$('reels-seek'), time=$('reels-time');
+  const clock = value => {const seconds=Math.max(0,Math.floor(value || 0));return Math.floor(seconds/60)+':'+String(seconds%60).padStart(2,'0');};
+  const updateSeek = () => {
+    const duration=Number.isFinite(video.duration)?video.duration:0;
+    seek.disabled=!duration;seek.max=String(duration || 1);seek.value=String(video.currentTime || 0);
+    time.textContent=clock(video.currentTime)+' / '+clock(duration);
+    seek.setAttribute('aria-valuetext',clock(video.currentTime)+' of '+clock(duration));
+  };
+  for(const event of ['timeupdate','durationchange','loadedmetadata','emptied']) video.addEventListener(event,updateSeek);
+  seek.addEventListener('input',() => {controller.seek(Number(seek.value)-video.currentTime);updateSeek();});
+  updateSeek();
   $('reels-reload').addEventListener('click',() => {controller.suspend();location.reload();});
   function changeOrder(order,reshuffle) {
     controller.capture();
@@ -204,7 +312,10 @@ export const REELS_BROWSER = String.raw`
   window.addEventListener('pagehide',() => controller.suspend());
   window.addEventListener('pageshow',event => {if(event.persisted && !reloadStarted) {reloadStarted=true;controller.suspend();location.replace(urls.href(currentContext()));}});
   document.addEventListener('keydown',event => {
-    if(event.ctrlKey || event.altKey || event.metaKey || (event.shiftKey && !['<','>'].includes(event.key)) || document.fullscreenElement || video.webkitDisplayingFullscreen) return;
+    if(event.key==='Escape' && presentation.active()) {event.preventDefault();presentation.exit();return;}
+    if(event.key==='Tab') presentation.reveal();
+    if(event.ctrlKey || event.altKey || event.metaKey || (event.shiftKey && !['<','>'].includes(event.key)) || (document.fullscreenElement && document.fullscreenElement!==root) || video.webkitDisplayingFullscreen) return;
+    if(event.key.toLowerCase()==='f' && !event.target.closest('input,textarea,select,[contenteditable]:not([contenteditable="false"])')) {event.preventDefault();presentation.toggle();return;}
     if(event.target.closest('video,button,a,input,textarea,select,[contenteditable]:not([contenteditable="false"])')) return;
     const key=event.key.toLowerCase(), speeds=[.5,.75,1,1.25,1.5,1.75,2];
     if(!['arrowup','pageup','arrowdown','pagedown',' ','k','j','l','arrowleft','arrowright','m','f','<','>'].includes(key)) return;
@@ -213,11 +324,10 @@ export const REELS_BROWSER = String.raw`
     else if(['arrowdown','pagedown'].includes(key)) navigate(1);
     else if([' ','k'].includes(key)) controller.toggle();
     else if(key==='m') controller.mute();
-    else if(key==='f') { if(video.requestFullscreen) video.requestFullscreen().catch(() => {}); else if(video.webkitEnterFullscreen) video.webkitEnterFullscreen(); }
     else if(key==='<' || key==='>') controller.speed(speeds[Math.max(0,Math.min(speeds.length-1,speeds.indexOf(session.speed)+(key==='>'?1:-1)))]);
     else controller.seek(key==='j'?-10:key==='l'?10:key==='arrowleft'?-5:5);
   });
   $('reels-app').hidden=false;
   refresh(true); recenter(); openCurrent(!restored.restored && (!context.hadSession || restored.notice==='refreshed'));
-})(REELS_ITEMS, REELS_CONTEXT, REELS_STATE, REELS_URLS, REELS_CONTROLLER);
+})(REELS_ITEMS, REELS_CONTEXT, REELS_STATE, REELS_URLS, REELS_CONTROLLER, REELS_PRESENTATION);
 `;
