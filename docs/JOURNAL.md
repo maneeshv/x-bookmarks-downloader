@@ -1,5 +1,13 @@
 # Journal
 
+## 2026-11-06 — Add approximate thumbnail suggestions (not deployed)
+- Did: implemented owner-approved deterministic browser-side similarity in PR39, preserving combined baseline1707857 and all exact cleanup guards. Added bounded scans, cancel/progress, pairwise previews and Watch links. ADR0028; spec/plan and calibration QA in docs. Reels fullscreen is isolated in PR40/ADR0027.
+- Decided: `dhash-rgb-v1`, conservative fixture-calibrated gates, no dependencies/migrations/AI/external transfer/persistent cache. No deployment or merge; separate Reels-only release authorization does not lift this hold.
+- Learned / gotcha: remote preview URLs bypassed the scanner budget; replaced them with bounded data URLs from decoded pixels (regression tested). Installed FFmpeg lacks WebP encoder; generator comment and QA encode the Canvas alternative. Existing task-owned preview still held4399 after sandbox curl failed; stopped its known session before restart. Existing sandbox localhost guidance applies. Restored ignored local keep_names=false from tracked example for dry-run bundling.
+- Verified: both typechecks,185tests, local dry-run bundle/session gate, independent review with no remaining findings; native desktop/mobile390px scan, cancel, Play and Watch interactions. Synthetic calibration accepts JPEG/resize/WebP positives and rejects tested crop/unrelated/low-detail negatives. No production scans, video deletion or other production mutations. See [QA](research/2026-11-06-approximate-thumbnail-qa.md).
+- Release coordination: Reels owner reports separately authorized Worker ee3627d4-16f6-4f24-bd0a-59a0dfc08156/sourcec6d8731 at100%,2026-11-06T13:09:07Z, excluding approximate work. Not independently production-verified by this task.
+- Left undone: owner approval to deploy approximate; real-library calibration and physical mobile/cross-browser acceptance. Commit/push/PR publication recorded in this session; no merge.
+
 ## 2026-11-06 — Integrate Reels with live thumbnails for owner testing
 - Did: owner authorized deployment for hands-on testing via coordinator. Verified production `2002eed9-d2db-4ac7-98d5-530f44514131` at 100%, annotation `3699ff1`; fetched PR #39 branch `763ac15`. Thumbnail owner confirmed deployment hold, no newer/live-only changes and no migrations. Combined both branches; preserved thumbnail ADRs 24/25 and renumbered Reels ADR to26.
 - Decided: deploy the combined source on the existing domain; physical-device acceptance remains pending. No real videos/data will be deleted; no Access-policy changes.
