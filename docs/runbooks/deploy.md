@@ -26,6 +26,8 @@ Never log OAuth tokens or binding secret values. A missing local `OWNER_EMAIL` m
 from the verified live plain-text binding before deployment. Transient Workers API 503s can
 also block remote-binding previews; retry a bounded number of times and keep the release
 blocked until source/settings/checksum prerequisites can be verified.
+For signed-out route smoke checks, use the curl commands below. On 2026-11-06 Python urllib returned 403 for all three URLs while curl GET/HEAD returned the expected Access 302 and disabled workers.dev 404; compare clients before diagnosing that discrepancy as a deployment regression. Do not print redirect cookies or full Access URLs.
+
 Source: https://github.com/cloudflare/workers-sdk/blob/main/packages/wrangler/src/init.ts
 (Context7, 2026-11-06).
 

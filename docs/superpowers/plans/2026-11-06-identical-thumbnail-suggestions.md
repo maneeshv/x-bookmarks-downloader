@@ -19,6 +19,8 @@ Date: 2026-11-06. Owner approved via Sage: “Ok let's proceed with that. I appr
 - [x] UI TDD: cross-page groups/retry dedup, missing metadata exclusion, no suggestion controls/resolve calls, failure retry and progress; add separately labeled section and reuse existing card rendering in review-only mode. Execute bundled script regression.
 - [x] Read-only production poster metadata scan and live source/settings/rollback preflight. Verify code includes current main and previous PR state; no real media deletion.
 - [x] Full checks and independent review; real desktop/mobile synthetic interaction, exact scan unchanged; fix findings. Update architecture/session docs.
-- [ ] Commit/push into current open PR #39, update description to final scope, deploy verified bundle; check live source/traffic/protected routes and record release evidence. Owner-signed-in UI only if authenticated browser is available.
+- [x] Commit/push into current open PR #39, update description to final scope, deploy verified bundle; check live source/traffic/protected routes and record release evidence. Owner-signed-in UI only if authenticated browser is available.
 
 Verification commands: `node --no-warnings --test test/thumbnails.test.ts test/duplicates.routes.test.ts test/duplicates.ui.test.ts`, `npm run check`, `git diff --check`, `scripts/check-session.sh`.
+
+Release: implementation `3699ff1`, open PR #39, Worker `2002eed9-d2db-4ac7-98d5-530f44514131` at 100%. Signed-in production browser validation is owner-only; deployment/source/access verification completed. See [QA](../../research/2026-11-06-thumbnail-suggestions-qa.md).
