@@ -1,6 +1,7 @@
 # Journal
 
 ## 2026-11-06 — Deploy immersive Reels only
+- Coordination follow-up: owner reported fullscreen looks good and authorized approximate-thumbnail deployment for testing, preserving Reels. PR #39 agent is sole deployment owner; neither PR may merge. Confirmed clean tip `f42b4f6`, no subsequent live/source/config changes; supplied exact release hash, pre/postflight artifacts and browser harness recipe. This agent holds deployments. No new production checks or mutations in this coordination follow-up.
 - Did: owner explicitly authorized “Deploy the reels change”, lifting only the Reels deployment hold. Thumbnail owner confirmed no newer production/config changes since `e9dcde25` / `95e2571`; approximate matching stays excluded and undeployed. No merge, migrations, media deletion or unrelated production mutations.
 - Decided: release source `c6d8731` (implementation `a258d6b`), whose only product differences from the verified live baseline are `src/reels-client.ts` and `src/reels-html.ts`. Preserve exact duplicate/identical-thumbnail review. Rollback: `e9dcde25-bf50-4933-92de-f8cb6807a7bd`.
 - Learned / gotcha: no new operational gotcha; followed the documented live-source/config preflight and Access smoke procedure.
