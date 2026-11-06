@@ -1,5 +1,11 @@
 # Journal
 
+## 2026-11-06 — Verify Reels publication and refresh release record
+- Did: owner requested commit/push/PR verification. Confirmed PR #40 already open on `feat/reels-view`, local/remote head `067b98a` matched and worktree clean; no pending intended product changes. Updated stale STATUS/PR deployment record from the deployment owner's combined-release report, without integrating unrelated thumbnail work or querying/mutating production.
+- Verified: Git diff confirms product/tests/scripts/config unchanged from tested `a258d6b`; GitHub CI run42226798933 passed at `067b98a`. Git confirms combined `61703e1` contains exactly the accepted Reels UI files from `f42b4f6`. Prior 181 tests and48 browser checks remain applicable; not rerun for this documentation-only change. Documentation whitespace and session gate checked before publication.
+- Learned / gotcha: no new gotcha. Combined production source is newer than this PR branch; any later deployment must integrate it.
+- Left undone: no merge or deployment under this request. Thumbnail acceptance and physical-device/assistive-tech limits remain. Publication updates only; no empty commit or duplicate PR.
+
 ## 2026-11-06 — Deploy immersive Reels only
 - Coordination follow-up: owner reported fullscreen looks good and authorized approximate-thumbnail deployment for testing, preserving Reels. PR #39 agent is sole deployment owner; neither PR may merge. Confirmed clean tip `f42b4f6`, no subsequent live/source/config changes; supplied exact release hash, pre/postflight artifacts and browser harness recipe. This agent holds deployments. No new production checks or mutations in this coordination follow-up.
 - Did: owner explicitly authorized “Deploy the reels change”, lifting only the Reels deployment hold. Thumbnail owner confirmed no newer production/config changes since `e9dcde25` / `95e2571`; approximate matching stays excluded and undeployed. No merge, migrations, media deletion or unrelated production mutations.
