@@ -75,6 +75,8 @@
 - [x] Verify live thumbnail version/source/config and integrate PR #39 into PR #40.
 - [x] Preserve live ADRs 24/25; renumber Reels ADR to26.
 - [x] Run combined typechecks, 171 tests, bundle check, and independent source review.
-- [ ] Complete combined browser verification, commit/push, and deploy with live settings preserved.
-- [ ] Verify exact served source, 100% version traffic, domain/cron/privacy and document evidence.
+- [x] Complete combined browser verification, commit/push, and deploy with live settings preserved.
+- [x] Verify exact served source, 100% version traffic, domain/cron/privacy and document evidence.
 - [ ] Owner completes signed-in physical-phone acceptance; this is the purpose of the authorized testing deployment.
+
+- 2026-11-06: source `95e2571` deployed at 100% as `e9dcde25-bf50-4933-92de-f8cb6807a7bd`; source/config equality and Access smoke checks verified. Owner-signed-in/phone tests remain pending.
