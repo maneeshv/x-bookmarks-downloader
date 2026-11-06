@@ -58,7 +58,7 @@
 - [x] Browser test actual short media through local authenticated handler fixtures: 320/390 desktop/landscape, playback, ordered/shuffle, swipe/buttons/keys, Details return, editing/deletion, storage loss, error/retry, hidden/visible, repeated navigation and source counts. Save representative screenshots. Never claim device-specific behavior from emulation.
 - [x] Independent spec/security/lifecycle review; fix material findings and rerun affected checks.
 - [x] Run whitespace, session and final type/test checks; record remaining phone-only release gates.
-- [ ] Commit with conventional message, push feature branch, open PR with verification evidence and explicit no-deployment status. No merge or deploy.
+- [x] Commit with conventional message, push feature branch, open PR with verification evidence and explicit no-deployment status. No merge or deploy.
 
 ## Execution rulings
 
@@ -67,3 +67,5 @@
 - 2026-11-06: Claude adapter readiness rejects CLI2.1.291 for missing logs/attach; do not upgrade or bypass the adapter. Available native coding agents handle implementation/review.
 
 - 2026-11-06: State/backend/final reviews complete, material findings fixed. Final local check: 136 tests, both typechecks, dry-run bundle VM check and session gate pass. Built-worker Chrome acceptance script passes all 25 checks. Actual phones remain a release gate.
+
+- 2026-11-06: Published commit `2a655e9` on `feat/reels-view`, [PR #40](https://github.com/maneeshv/x-bookmarks-downloader/pull/40). No merge/deploy; physical-device gate remains.
