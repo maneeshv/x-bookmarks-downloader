@@ -1,3 +1,5 @@
+import { createPerceptualTools } from "#src/perceptual";
+import { createPerceptualScanner } from "#src/perceptual-scan";
 import { CRON_INTERVAL_MS, MAX_DOWNLOADS_PER_RUN, MAX_FILE_BYTES, POST_ID_RE, VIDEO_KEY_RE } from "#src/limits";
 import { reelsHref, reelsLibraryHref, type ReelsContext } from "#src/reels-context";
 import { createDuplicateReviewState, createThumbnailReviewState, duplicatesBrowserScript } from "#src/duplicates-ui";
@@ -329,7 +331,7 @@ const ra=document.getElementById("retry-all");if(ra)ra.onclick=async()=>{ra.disa
 
 
 export function renderDuplicates(): string {
-  const script = duplicatesBrowserScript.replace("CREATE_STATE", `(${createDuplicateReviewState.toString()})`).replace("CREATE_THUMBNAILS", `(${createThumbnailReviewState.toString()})`);
+  const script = duplicatesBrowserScript.replace("CREATE_STATE", `(${createDuplicateReviewState.toString()})`).replace("CREATE_THUMBNAILS", `(${createThumbnailReviewState.toString()})`).replace("CREATE_PERCEPTUAL", `(${createPerceptualTools.toString()})`).replace("CREATE_SIMILAR_SCANNER", `(${createPerceptualScanner.toString()})`);
   return page("Duplicates", `${appHeader("", '<a class="nav-link" href="/">Library</a>')}
 <main id="content" class="stats-shell duplicates-shell">
   <header class="stats-heading"><p class="eyebrow">Library maintenance</p><h1>Duplicates</h1><p>Review exact video copies in one place. Choose which copy to keep and remove redundant entries to reclaim storage.</p></header>
@@ -346,6 +348,14 @@ export function renderDuplicates(): string {
     <div class="duplicate-actions"><button id="thumbnail-scan" class="button" type="button">Scan thumbnails</button><button id="thumbnail-pause" class="button" type="button" hidden>Pause</button><button id="thumbnail-rescan" class="button" type="button" hidden>Rescan thumbnails</button></div>
     <p id="thumbnail-status" role="status" aria-live="polite" aria-atomic="true">No thumbnail scan started.</p><p id="thumbnail-coverage" class="d"></p>
     <div id="thumbnail-results"></div><div id="thumbnail-unknown"></div>
+  </section>
+  <section class="stats-section" aria-labelledby="similar-heading">
+    <h2 id="similar-heading">Suggested matches — similar thumbnails</h2>
+    <p class="d">Compare resized or recompressed thumbnails on this device. Video names, sizes and durations may differ. Review each pair separately; a match with one video does not imply a match with its other suggestions. Scores are hash similarity, not a probability of duplicate videos. Shared covers can match unrelated videos; review both.</p>
+    <p class="d">Manual scan of up to 500 single-video entries, 32 MiB of thumbnails and 100 pairs. Oversized, low-detail, missing or unreadable images are skipped. Exact thumbnail pairs and known exact-video pairs are omitted. Different browser decoders may produce different results.</p>
+    <div class="duplicate-actions"><button id="similar-scan" class="button" type="button">Scan similar thumbnails</button><button id="similar-cancel" class="button" type="button" hidden>Cancel scan</button></div>
+    <p id="similar-status" role="status" aria-live="polite" aria-atomic="true">No similarity scan started. Images stay in your browser; no video files are read by the scan.</p>
+    <p id="similar-coverage" class="d"></p><div id="similar-results"></div>
   </section>
 </main>
 <style>

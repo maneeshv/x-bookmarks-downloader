@@ -102,7 +102,7 @@ test('Wrangler-style keepNames bundling leaves emitted browser script executable
   let requests=0;
   const document={getElementById(id:string){if(!elements.has(id))elements.set(id,{});return elements.get(id);}};
   new vm.Script(script).runInNewContext({document,fetch(){requests++;throw new Error('must not auto-scan');}});
-  assert.equal(requests,0);assert.equal(typeof elements.get('duplicate-scan')!.onclick,'function');
+  assert.equal(requests,0);assert.equal(typeof elements.get('duplicate-scan')!.onclick,'function');assert.equal(typeof elements.get('similar-scan')!.onclick,'function');
 });
 test('request failure stops the controller; Continue resumes from the last acknowledged cursor without stealing focus', async () => {
   const page=html.renderDuplicates(),script=page.match(/<script>([\s\S]*?)<\/script>/)![1]!;
@@ -172,4 +172,9 @@ test('rendered thumbnail suggestions allow different video metadata and only Wat
  const text=(e:Element):string=>e.textContent+' '+e.children.map(text).join(' ');const rendered=text(results);
  assert.match(rendered,/3 B · 0:05/);assert.match(rendered,/70 B · 0:09/);assert.doesNotMatch(rendered,/reclaim|redundant|keep this|remove this/i);
  assert.equal(results.querySelectorAll('a').filter((a:any)=>a.href?.startsWith('/watch/')).length,3);assert.match(elements.get('thumbnail-status')!.textContent,/complete/i);
+});
+
+test('approximate review renders a manual cancellable section with no probability or cleanup actions',()=>{
+ const page=html.renderDuplicates();assert.match(page,/id="similar-scan"/);assert.match(page,/Scan similar thumbnails/);assert.match(page,/id="similar-cancel"/);
+ assert.match(page,/hash similarity/i);assert.match(page,/32 MiB/);assert.match(page,/500/);
 });
