@@ -120,3 +120,19 @@ test("failures during R2, tombstone and counter writes are server errors and pre
     assert.equal((await a.store.getStatus()).totalBytes, 6);
   }
 });
+
+test('thumbnail endpoint is read-only owner-only, private, paginated and validates cursor',async()=>{
+ const a=await app(),path='/api/duplicates/thumbnails';
+ for(const token of [null,a.viewer])assert.equal((await a.send(path,{},token)).status,403);
+ await a.r2.put('posters/10000','abc',{httpMetadata:{contentType:'image/png'}});
+ await a.r2.put('posters/10001','abc',{httpMetadata:{contentType:'image/png'}});
+ a.db.db.exec("UPDATE bookmarks SET bytes=9,duration_ms=8000 WHERE post_id='10001'");
+ const res=await a.send(path);assert.equal(res.status,200);assertPrivate(res);const batch=await res.json() as any;assert.equal(batch.items.length,2);assert.deepEqual(batch.items[0].poster,batch.items[1].poster);
+ for(const q of ['afterPostId=bad','afterPostId=','afterPostId=10000&afterPostId=10001'])await assertSafeError(await a.send(path+'?'+q),400);
+ const next=await a.send(path+'?afterPostId=10000');assert.equal((await next.json() as any).items.length,1);
+ await assertSafeError(await a.send(path,{method:'POST'}),405);
+ await assertSafeError(await a.post({keep:'10000',remove:'10001',expected:batch.items[0].poster}),409);
+ assert.equal((await a.store.getBookmark('10001'))!.deleted_at,null);
+ a.r2.head=async()=>{throw new Error('secret');};const partial=await a.send(path);assertPrivate(partial);assert.ok((await partial.json() as any).items.every((i:any)=>!i.poster&&i.reason==='metadata_unavailable'));
+ a.db.prepare=()=>{throw new Error('secret');};await assertSafeError(await a.send(path),500);
+});

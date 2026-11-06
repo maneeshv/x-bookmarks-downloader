@@ -54,7 +54,7 @@ export class FakeR2 {
   objects = new Map<string, { bytes: Uint8Array; customMetadata: Record<string, string>; contentType: string; uploaded: Date }>();
   async head(key: string) {
     const o = this.objects.get(key);
-    return o ? { key, size: o.bytes.byteLength, customMetadata: o.customMetadata, checksums: { md5: Uint8Array.from(createHash("md5").update(o.bytes).digest()).buffer } } : null;
+    return o ? { key, size: o.bytes.byteLength, customMetadata: o.customMetadata, httpMetadata: { contentType: o.contentType }, checksums: { md5: Uint8Array.from(createHash("md5").update(o.bytes).digest()).buffer } } : null;
   }
   async put(key: string, body: ReadableStream | ArrayBuffer | Uint8Array | string, opts: any = {}) {
     if (opts.onlyIf?.etagDoesNotMatch === "*" && this.objects.has(key)) return null;

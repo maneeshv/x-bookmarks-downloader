@@ -1,4 +1,5 @@
 import { verifyAccessJwt } from "#src/access";
+import { scanThumbnails } from "#src/thumbnails";
 import { deleteBookmark, scanDuplicates, validateDuplicateResolution, type DuplicateCursor, type DuplicateResolve } from "#src/duplicates";
 import { renderDuplicates, renderIndex, renderQueue, renderStats, renderWatch } from "#src/html";
 import { BACKFILL_MAX_DOWNLOADS, BACKFILL_MAX_POSTERS, DESCRIPTION_MAX, MAX_DOWNLOADS_PER_RUN, MAX_FILE_BYTES, MIN_FILE_BYTES, POST_ID_RE, TAG_MAX, TAGS_MAX, TITLE_MAX, VIDEO_KEY_RE } from "#src/limits";
@@ -142,7 +143,7 @@ function parseLibraryQuery(url: URL): LibraryQuery {
 
 export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promise<Response> {
   const url = new URL(req.url);
-  const duplicatePath = ["/duplicates", "/api/duplicates/scan", "/api/duplicates/resolve"].includes(url.pathname);
+  const duplicatePath = ["/duplicates", "/api/duplicates/scan", "/api/duplicates/resolve", "/api/duplicates/thumbnails"].includes(url.pathname);
   const forbidden = () => duplicatePath ? duplicateJson({ error: "forbidden" }, 403) : new Response("forbidden", { status: 403 });
   // Every route, including the OAuth callback, sits behind Access (spec §4); the JWT check defends a misconfigured policy.
   const jwt = req.headers.get("cf-access-jwt-assertion");
@@ -165,6 +166,12 @@ export async function handle(req: Request, env: AppEnv, f: Fetch = fetch): Promi
       if (url.pathname === "/duplicates") {
         if (req.method !== "GET") return duplicateJson({ error: "method_not_allowed" }, 405);
         return new Response(renderDuplicates(), { headers: { ...privateHeaders, "content-type": "text/html; charset=utf-8" } });
+      }
+      if (url.pathname === "/api/duplicates/thumbnails") {
+        if (req.method !== "GET") return duplicateJson({ error: "method_not_allowed" }, 405);
+        const ids = url.searchParams.getAll("afterPostId");
+        if (ids.length > 1 || (ids.length === 1 && !POST_ID_RE.test(ids[0]!))) return duplicateJson({ error: "invalid_cursor" }, 400);
+        return duplicateJson(await scanThumbnails(store, ids[0] ?? null));
       }
       if (url.pathname === "/api/duplicates/scan") {
         if (req.method !== "GET") return duplicateJson({ error: "method_not_allowed" }, 405);

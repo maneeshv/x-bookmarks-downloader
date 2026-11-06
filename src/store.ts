@@ -65,6 +65,8 @@ const DUPLICATE_ROWS = `WITH classified AS (
 ), eligible AS (SELECT * FROM classified WHERE exclusion IS NULL),
 candidate_sizes AS (SELECT bytes FROM eligible GROUP BY bytes HAVING COUNT(*) > 1)`;
 
+const THUMBNAIL_ELIGIBLE = "status = 'downloaded' AND deleted_at IS NULL AND error IS NULL AND r2_key = post_id || '.mp4'";
+
 // R2 head(key) is the download truth (ADR-0003); D1 is the index (ADR-0007); KV is small mutable state.
 const UPSERT = `INSERT INTO bookmarks (post_id, first_seen_at, posted_at, text, post_url, has_video, status, error, r2_key, bytes, duration_ms, preview_url, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -155,6 +157,16 @@ export class Store {
       SELECT * FROM eligible WHERE bytes IN (SELECT bytes FROM candidate_sizes) ${after}
       ORDER BY bytes ASC, post_id ASC LIMIT ?`).bind(...args, DUPLICATE_SCAN_LIMIT + 1).all<BookmarkRow & { exclusion?: null }>();
     return results.map(({ exclusion: _exclusion, ...row }) => row);
+  }
+  async listThumbnailCandidates(after: string | null): Promise<BookmarkRow[]> {
+    const { results } = await this.db.prepare(`SELECT * FROM bookmarks WHERE ${THUMBNAIL_ELIGIBLE}
+      ${after ? "AND post_id > ?" : ""} ORDER BY post_id ASC LIMIT ?`)
+      .bind(...(after ? [after] : []), DUPLICATE_SCAN_LIMIT + 1).all<BookmarkRow>();
+    return results;
+  }
+  async countThumbnailCandidates(): Promise<number> {
+    const row = await this.db.prepare(`SELECT COUNT(*) AS n FROM bookmarks WHERE ${THUMBNAIL_ELIGIBLE}`).first<{ n: number }>();
+    return row?.n ?? 0;
   }
   async countDuplicates(): Promise<DuplicateScan["counts"]> {
     const row = await this.db.prepare(`${DUPLICATE_ROWS}

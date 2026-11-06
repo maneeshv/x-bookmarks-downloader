@@ -139,3 +139,37 @@ test('coverage details start collapsed and metadata labels have no dangling sepa
   await (elements.get('duplicate-scan')! as unknown as {onclick:()=>Promise<void>}).onclick();
   assert.equal(elements.get('duplicate-results')!.querySelector('.duplicate-metadata')!.textContent,'Favourite · Tags: Coast, Travel');
 });
+
+test('thumbnail state accumulates large cross-page groups, ignores unknowns and has no deletion state',async()=>{
+ const {createThumbnailReviewState}=await import('#src/duplicates-ui');const state=createThumbnailReviewState();
+ const entries=Array.from({length:105},(_,i)=>({row:row(String(10000+i),i+1),poster:{bytes:9,md5:hash},reason:null}));
+ state.ingest({items:entries.slice(0,100),eligible:106,nextCursor:'10099',checkedAt:'2026-11-06'});
+ state.ingest({items:entries.slice(99),eligible:106,nextCursor:null,checkedAt:'2026-11-06'});
+ state.ingest({items:[{row:row('99999'),poster:null,reason:'missing_poster'}],eligible:106,nextCursor:null,checkedAt:'2026-11-06'});
+ assert.equal(state.checked(),106);assert.equal(state.groups().length,1);assert.equal(state.groups()[0]!.items.length,105);assert.equal(state.unverified().length,1);
+ assert.equal('resolve' in state,false);assert.equal('chooseKeep' in state,false);state.reset();assert.equal(state.checked(),0);
+ const serialized=vm.runInNewContext('('+createThumbnailReviewState.toString()+')()');serialized.ingest({items:entries});assert.equal(serialized.groups().length,1);
+});
+
+test('rendered thumbnail suggestions allow different video metadata and only Watch links, retry interrupted batches',async()=>{
+ const page=html.renderDuplicates();assert.match(page,/Suggested matches — identical thumbnails/);
+ const script=page.match(/<script>([\s\S]*?)<\/script>/)![1]!;
+ class Element{
+  children:Element[]=[];dataset:Record<string,string>={};className='';textContent='';tag:string;hidden=false;disabled=false;
+  constructor(tag:string){this.tag=tag;} append(...nodes:Element[]){this.children.push(...nodes);} replaceChildren(...nodes:Element[]){this.children=nodes;}setAttribute(){}focus(){}
+  querySelectorAll(selector:string):Element[]{return this.children.flatMap(n=>[...(n.tag===selector?[n]:[]),...n.querySelectorAll(selector)]);}
+ }
+ const elements=new Map<string,Element>();const document={activeElement:null,createElement:(tag:string)=>new Element(tag),getElementById:(id:string)=>{if(!elements.has(id))elements.set(id,new Element('div'));return elements.get(id);}};
+ const first={row:row('10000',3),poster:{bytes:9,md5:hash},reason:null},second={row:{...row('10001',70),duration_ms:9000},poster:first.poster,reason:null};
+ const requested:string[]=[];let attempts=0;
+ new vm.Script(script).runInNewContext({document,URLSearchParams,fetch:async(url:string)=>{requested.push(url);attempts++;if(attempts===2)throw new Error('network');return {ok:true,json:async()=>({items:attempts===1?[first,second]:[{...second,row:{...second.row,post_id:'10002'}}],eligible:3,nextCursor:attempts===1?'10001':null,checkedAt:'2026-11-06'})};}});
+ assert.equal(requested.length,0);
+ await (elements.get('thumbnail-scan') as any).onclick();assert.match(elements.get('thumbnail-status')!.textContent,/partial/i);
+ const originalVideo=elements.get('thumbnail-results')!.querySelectorAll('video')[0];
+ (elements.get('thumbnail-pause') as any).onclick();await new Promise(r=>setImmediate(r));
+ assert.equal(requested[1],requested[2]);assert.ok(requested.every(u=>u.startsWith('/api/duplicates/thumbnails')));
+ const results=elements.get('thumbnail-results')!;assert.equal(results.querySelectorAll('video')[0],originalVideo,'later batches must preserve preview playback and focus');assert.equal(results.querySelectorAll('input').length,0);assert.equal(results.querySelectorAll('button').length,0);
+ const text=(e:Element):string=>e.textContent+' '+e.children.map(text).join(' ');const rendered=text(results);
+ assert.match(rendered,/3 B · 0:05/);assert.match(rendered,/70 B · 0:09/);assert.doesNotMatch(rendered,/reclaim|redundant|keep this|remove this/i);
+ assert.equal(results.querySelectorAll('a').filter((a:any)=>a.href?.startsWith('/watch/')).length,3);assert.match(elements.get('thumbnail-status')!.textContent,/complete/i);
+});
