@@ -1,5 +1,12 @@
 # Journal
 
+## 2026-11-06 — Resolve PR39 conflicts after Reels merge
+- Did: owner reported conflicts after merging another PR. GitHub confirms PR40 merged into main at ba1fa4e; PR39 remained open/conflicting. Integrated that main revision into pleasant-fireant, preserving both session histories and updating current status. Conflicts were only JOURNAL/STATUS; no application, test, dependency, configuration or migration changes.
+- Decided: keep the already-tested combined runtime intact. This is a PR39 branch update, not a GitHub PR merge or deployment.
+- Learned / gotcha: none; existing shared-main/status guidance applies.
+- Verified: conflict-marker/whitespace and session checks; complete non-document tree compared with pre-merge e46db89. Runtime checks are reused from the identical195-test combined release; GitHub CI will verify the pushed head.
+- Left undone: PR39 review/merge remains with the owner; no production changes. Real-library calibration/device limitations remain as recorded.
+
 ## 2026-11-06 — Deploy approximate review with accepted fullscreen Reels
 - Did: owner authorized approximate-thumbnail deployment for testing after accepting fullscreen Reels. Integrated immutable Reels tip f42b4f6 into PR39; only session docs conflicted, retained both histories. Reels owner confirmed sole release ownership and no newer source/config/live-only changes. Neither GitHub PR may merge before thumbnail acceptance.
 - Decided: preserve accepted Reels files byte-for-byte and exact cleanup guards; no migrations or production media mutations. Rollback target ee3627d4-16f6-4f24-bd0a-59a0dfc08156.
@@ -16,7 +23,14 @@
 - Release coordination: Reels owner reports separately authorized Worker ee3627d4-16f6-4f24-bd0a-59a0dfc08156/sourcec6d8731 at100%,2026-11-06T13:09:07Z, excluding approximate work. Not independently production-verified by this task.
 - Left undone: owner approval to deploy approximate; real-library calibration and physical mobile/cross-browser acceptance. Commit/push/PR publication recorded in this session; no merge.
 
+## 2026-11-06 — Verify Reels publication and refresh release record
+- Did: owner requested commit/push/PR verification. Confirmed PR #40 already open on `feat/reels-view`, local/remote head `067b98a` matched and worktree clean; no pending intended product changes. Updated stale STATUS/PR deployment record from the deployment owner's combined-release report, without integrating unrelated thumbnail work or querying/mutating production.
+- Verified: Git diff confirms product/tests/scripts/config unchanged from tested `a258d6b`; GitHub CI run42226798933 passed at `067b98a`. Git confirms combined `61703e1` contains exactly the accepted Reels UI files from `f42b4f6`. Prior 181 tests and48 browser checks remain applicable; not rerun for this documentation-only change. Documentation whitespace and session gate checked before publication.
+- Learned / gotcha: no new gotcha. Combined production source is newer than this PR branch; any later deployment must integrate it.
+- Left undone: no merge or deployment under this request. Thumbnail acceptance and physical-device/assistive-tech limits remain. Publication updates only; no empty commit or duplicate PR.
+
 ## 2026-11-06 — Deploy immersive Reels only
+- Coordination follow-up: owner reported fullscreen looks good and authorized approximate-thumbnail deployment for testing, preserving Reels. PR #39 agent is sole deployment owner; neither PR may merge. Confirmed clean tip `f42b4f6`, no subsequent live/source/config changes; supplied exact release hash, pre/postflight artifacts and browser harness recipe. This agent holds deployments. No new production checks or mutations in this coordination follow-up.
 - Did: owner explicitly authorized “Deploy the reels change”, lifting only the Reels deployment hold. Thumbnail owner confirmed no newer production/config changes since `e9dcde25` / `95e2571`; approximate matching stays excluded and undeployed. No merge, migrations, media deletion or unrelated production mutations.
 - Decided: release source `c6d8731` (implementation `a258d6b`), whose only product differences from the verified live baseline are `src/reels-client.ts` and `src/reels-html.ts`. Preserve exact duplicate/identical-thumbnail review. Rollback: `e9dcde25-bf50-4933-92de-f8cb6807a7bd`.
 - Learned / gotcha: no new operational gotcha; followed the documented live-source/config preflight and Access smoke procedure.
