@@ -1,8 +1,8 @@
 Updated: 2026-11-07
 
 ## Now
-- **Delete from thumbnail suggestions (ADR-0029):** every card in the identical- and similar-thumbnail lists on /duplicates has **Delete this video** (confirm → `DELETE /api/videos/:id`, card replaced in place, other results kept). Branch `slick-lamprey`, built on main 2b3ef25. PR and deployment details are in the top JOURNAL entry.
-- Production before this change: Worker 6ecc9230-380c-4ff2-9033-d99b46074854 (main 2b3ef25, PR39+PR40 merged), deployed 2026-11-06T16:54:40Z. Its bundle equals the main dry-run (verified 2026-11-07).
+- **Delete from thumbnail suggestions (ADR-0029):** every card in the identical- and similar-thumbnail lists on /duplicates has **Delete this video** (confirm → `DELETE /api/videos/:id`, card replaced in place, other results kept). **PR #41 open (not merged)**, deployed as Worker 0243f624-1957-437a-990e-58d87108d91f at 100%, 2026-11-07T06:29:18Z. Rollback: 6ecc9230 (main 2b3ef25). Merge PR #41 before deploying any other branch, or this feature regresses.
+- Previous production: Worker 6ecc9230-380c-4ff2-9033-d99b46074854 (main 2b3ef25, PR39+PR40 merged), deployed 2026-11-06T16:54:40Z. Its bundle equals the main dry-run (verified 2026-11-07).
 - Approximate cards already play inline (`<video controls>`, verified in headless Chromium 2026-11-07). Owner reported no playback; waiting on which device/browser.
 
 ## Next
