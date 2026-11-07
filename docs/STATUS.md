@@ -1,24 +1,23 @@
-Updated: 2026-11-06
+Updated: 2026-11-07
 
 ## Now
-- **PR39 conflicts resolved after owner merged PR40:** integrated main ba1fa4e; only JOURNAL/STATUS conflicted. Preserved both histories; runtime tree unchanged from verified combined release. No deployment or GitHub PR merge in this follow-up.
-- **Approximate thumbnails + accepted fullscreen Reels deployed for owner testing:** https://xrender.uk/duplicates and https://xrender.uk/reels. Source61703e1 (approximatea234a98 + accepted Reelsf42b4f6/c6d8731), Worker318f610d-d71d-4ee1-b4d8-951bc232a24d at100%,2026-11-06T13:40:54Z. PR39 updated with combined source; **PR40 merged into main at ba1fa4e; PR39 remains open**.
-- **Verified:**195tests, both typechecks, dry-run bundle/session checks, independent review and native combined fullscreen/overlay/navigation/Exit plus thumbnail scanning pass. Live source byte-equals tested/release bundles; SHA256 abb723492fc37ef5e5bce7754c7430bc0d0e29139734cca36edc599880ac0cd4. All bindings/settings, cron, disabled workers.dev/previews preserved. Protected routes302; workers.dev404. Native production browser reached Sign in; owner-authenticated real-library results remain unverified.
-- Approximate policy: ADR0028; [QA and test steps](research/2026-11-06-approximate-thumbnail-qa.md). Review-only, no thumbnail deletion, no production media mutation or migration. Rollback: ee3627d4-16f6-4f24-bd0a-59a0dfc08156 (accepted fullscreen without approximate).
+- **Delete from thumbnail suggestions (ADR-0029):** every card in the identical- and similar-thumbnail lists on /duplicates has **Delete this video** (confirm → `DELETE /api/videos/:id`, card replaced in place, other results kept). Branch `slick-lamprey`, built on main 2b3ef25. PR and deployment details are in the top JOURNAL entry.
+- Production before this change: Worker 6ecc9230-380c-4ff2-9033-d99b46074854 (main 2b3ef25, PR39+PR40 merged), deployed 2026-11-06T16:54:40Z. Its bundle equals the main dry-run (verified 2026-11-07).
+- Approximate cards already play inline (`<video controls>`, verified in headless Chromium 2026-11-07). Owner reported no playback; waiting on which device/browser.
 
 ## Next
-1. Owner, signed in: Duplicates → Suggested matches — similar thumbnails → Scan similar thumbnails. Review each pair and Watch video links; try Cancel scan. Scores are hash similarity, not duplicate certainty. Existing Scan thumbnails remains exact poster equality; Scan for duplicates remains exact-video review.
-2. PR40 is merged. Obtain owner thumbnail acceptance/authorization before merging PR39. Preserve combined61703e1 or descendants for any subsequent deployment; deploying older PR40/PR39 source would regress accepted functionality.
-3. Keep physical-device/assistive-tech and real-library calibration limitations documented; synthetic calibration does not establish production precision/recall.
-4. Reconcile download-queue and viewer expansion checks separately; no Access policy change in this release.
+1. Owner, signed in: Duplicates → run either suggestion scan → play a pair → Delete this video on one card. Expect the confirm dialog, then "Deleted from the library" in place, with the rest of the list still there.
+2. Owner: say which device/browser shows no playback on similar-thumbnail cards, so it can be reproduced.
+3. Keep real-library similarity calibration and physical-device/assistive-tech limitations documented (ADR-0028).
+4. Reconcile download-queue and viewer expansion checks separately; no Access policy change.
 
 ## Blocked
-- Physical-device/assistive-technology acceptance needs owner devices. The owner authorized deployment for this hands-on testing.
+- Physical-device/assistive-technology acceptance needs owner devices.
 - Access expansion still needs authenticated owner validation and test accounts; no admission policy changed.
 
 ## Done (last 5; older in JOURNAL)
-- 2026-11-06 Deployed optional immersive Reels as `ee3627d4`, source `c6d8731`; approximate matching excluded.
-- 2026-11-06 Deployed combined original Reels + identical-thumbnail review as `e9dcde25`, source `95e2571`.
-- 2026-11-06 Added/deployed identical-thumbnail suggestions (`2002eed9`, PR #39) before combined Reels deployment.
-- 2026-11-06 Built/published original Reels PR #40 with approved spec and visual previews.
-- 2026-10-31 Deployed save-first backfill + Queue (`92b1c6a8`, PR #38).
+- 2026-11-07 Added per-card delete to thumbnail suggestion lists (ADR-0029).
+- 2026-11-06 PR39 (approximate thumbnails) and PR40 (Reels) merged; main 2b3ef25 deployed as 6ecc9230.
+- 2026-11-06 Deployed approximate thumbnails + accepted fullscreen Reels as 318f610d (source 61703e1).
+- 2026-11-06 Deployed optional immersive Reels as `ee3627d4`, source `c6d8731`.
+- 2026-11-06 Added identical-thumbnail suggestions (`2002eed9`, PR #39).

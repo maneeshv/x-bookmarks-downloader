@@ -1,5 +1,12 @@
 # Journal
 
+## 2026-11-07 — Delete from thumbnail suggestion cards
+- Did: owner asked for a delete button on every card in the identical- and similar-thumbnail suggestion lists (they had to open the detail page, and the in-memory list was lost on return), plus inline playback on approximate cards. Added **Delete this video** to each suggestion card. It confirms, calls existing `DELETE /api/videos/:id`, and replaces every card for that post with a Deleted marker in place. Added exact-state `forget()` so exact cleanup never targets a tombstoned row. Page copy updated. ADR-0029, with follow-up pointers in ADR-0025/0028.
+- Decided: reuse the detail-page delete route (no new endpoint/precondition/migration). Only 204 counts as success. Delete buttons share the page-wide scan/delete lock. No playback change: approximate cards already render `<video controls src=/v/…>` (main == live). In headless Chromium a similar-pair video played inline (currentTime 0.5–0.8 s). Asked the owner which device/browser shows no playback.
+- Learned / gotcha: this worktree's `wrangler.toml` lacked `keep_names = false` and `OWNER_EMAIL` (restored from example + live binding; GOTCHAS line amended). Paseo browser cannot reach local `127.0.0.1` previews; used CDP headless Chrome (new GOTCHAS line). Escape `\\n` inside the TS template-literal browser script, or the emitted script fails to parse (existing tests caught it).
+- Verified: tests (197), both typechecks, `check:bundle`. Synthetic preview in headless Chrome: 2 identical + 18 similar delete buttons, unlocked after scans. Deleting post 91000 marked all 4 of its pair cards, `/watch/91000` then 404. Preflight: live 6ecc9230 bundle equals main 2b3ef25 dry-run apart from esbuild's default-export name. Live bindings/compat/observability recorded.
+- Left undone: owner-signed-in production check of the new buttons; playback question to owner.
+
 ## 2026-11-06 — Resolve PR39 conflicts after Reels merge
 - Did: owner reported conflicts after merging another PR. GitHub confirms PR40 merged into main at ba1fa4e; PR39 remained open/conflicting. Integrated that main revision into pleasant-fireant, preserving both session histories and updating current status. Conflicts were only JOURNAL/STATUS; no application, test, dependency, configuration or migration changes.
 - Decided: keep the already-tested combined runtime intact. This is a PR39 branch update, not a GitHub PR merge or deployment.
