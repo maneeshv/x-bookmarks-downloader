@@ -9,3 +9,5 @@ Add an independent bounded metadata scan of private stored posters for live sing
 
 ## Consequences
 Small metadata-only scan; no external image transfer or decoder. Same covers/intro images can suggest unrelated videos and differently encoded images can be missed. Results are non-transactional and session-local. Revisit approximate matching only after sample calibration; any thumbnail-based deletion requires separate approval/design.
+
+Follow-up 2026-11-07: owner authorized per-card single-video deletion from suggestions; see ADR-0029. Matching rule unchanged.

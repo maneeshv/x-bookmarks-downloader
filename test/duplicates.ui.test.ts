@@ -35,6 +35,16 @@ test('scan keeps an unfinished size bucket across batches and deduplicates retri
   assert.equal(state.checked(), 3);
   assert.equal(state.pendingCount(),0);
 });
+test('forget drops a deleted entry from exact groups and selections without marking the scan stale', async () => {
+  const state = (await factory())();
+  state.ingest(batch([item('1'),item('2'),item('3')]));
+  const id = state.groups()[0]!.id;
+  state.chooseKeep(id,'1');state.chooseRemove(id,'2',true);state.chooseRemove(id,'3',true);
+  state.forget('2');
+  assert.deepEqual(state.groups()[0]!.items.map(x=>x.row.post_id),['1','3']);assert.deepEqual(state.groups()[0]!.remove,['3']);
+  state.forget('1');
+  assert.equal(state.groups().length,0,'a single remaining copy is no longer a match');assert.equal(state.requiresRescan(),false);
+});
 test('different hashes and unverifiable entries never form an actionable match', async () => {
   const state = (await factory())();
   const input = batch([item('1'),item('2',42,'b'.repeat(32))]);
@@ -140,7 +150,7 @@ test('coverage details start collapsed and metadata labels have no dangling sepa
   assert.equal(elements.get('duplicate-results')!.querySelector('.duplicate-metadata')!.textContent,'Favourite · Tags: Coast, Travel');
 });
 
-test('thumbnail state accumulates large cross-page groups, ignores unknowns and has no deletion state',async()=>{
+test('thumbnail state accumulates large cross-page groups, ignores unknowns and has no keeper/removal state',async()=>{
  const {createThumbnailReviewState}=await import('#src/duplicates-ui');const state=createThumbnailReviewState();
  const entries=Array.from({length:105},(_,i)=>({row:row(String(10000+i),i+1),poster:{bytes:9,md5:hash},reason:null}));
  state.ingest({items:entries.slice(0,100),eligible:106,nextCursor:'10099',checkedAt:'2026-11-06'});
@@ -151,7 +161,7 @@ test('thumbnail state accumulates large cross-page groups, ignores unknowns and 
  const serialized=vm.runInNewContext('('+createThumbnailReviewState.toString()+')()');serialized.ingest({items:entries});assert.equal(serialized.groups().length,1);
 });
 
-test('rendered thumbnail suggestions allow different video metadata and only Watch links, retry interrupted batches',async()=>{
+test('rendered thumbnail suggestions allow different video metadata, Watch links and per-video delete, retry interrupted batches',async()=>{
  const page=html.renderDuplicates();assert.match(page,/Suggested matches — identical thumbnails/);
  const script=page.match(/<script>([\s\S]*?)<\/script>/)![1]!;
  class Element{
@@ -168,7 +178,7 @@ test('rendered thumbnail suggestions allow different video metadata and only Wat
  const originalVideo=elements.get('thumbnail-results')!.querySelectorAll('video')[0];
  (elements.get('thumbnail-pause') as any).onclick();await new Promise(r=>setImmediate(r));
  assert.equal(requested[1],requested[2]);assert.ok(requested.every(u=>u.startsWith('/api/duplicates/thumbnails')));
- const results=elements.get('thumbnail-results')!;assert.equal(results.querySelectorAll('video')[0],originalVideo,'later batches must preserve preview playback and focus');assert.equal(results.querySelectorAll('input').length,0);assert.equal(results.querySelectorAll('button').length,0);
+ const results=elements.get('thumbnail-results')!;assert.equal(results.querySelectorAll('video')[0],originalVideo,'later batches must preserve preview playback and focus');assert.equal(results.querySelectorAll('input').length,0);assert.equal(results.querySelectorAll('button').length,3,'one Delete this video button per suggestion card');
  const text=(e:Element):string=>e.textContent+' '+e.children.map(text).join(' ');const rendered=text(results);
  assert.match(rendered,/3 B · 0:05/);assert.match(rendered,/70 B · 0:09/);assert.doesNotMatch(rendered,/reclaim|redundant|keep this|remove this/i);
  assert.equal(results.querySelectorAll('a').filter((a:any)=>a.href?.startsWith('/watch/')).length,3);assert.match(elements.get('thumbnail-status')!.textContent,/complete/i);
@@ -177,4 +187,31 @@ test('rendered thumbnail suggestions allow different video metadata and only Wat
 test('approximate review renders a manual cancellable section with no probability or cleanup actions',()=>{
  const page=html.renderDuplicates();assert.match(page,/id="similar-scan"/);assert.match(page,/Scan similar thumbnails/);assert.match(page,/id="similar-cancel"/);
  assert.match(page,/hash similarity/i);assert.match(page,/32 MiB/);assert.match(page,/500/);
+});
+
+test('suggestion Delete this video confirms, sends DELETE, replaces every card for that post and reports failures', async () => {
+ const script=html.renderDuplicates().match(/<script>([\s\S]*?)<\/script>/)![1]!;
+ class Element{
+  children:Element[]=[];parent:Element|null=null;dataset:Record<string,string>={};className='';textContent='';tag:string;hidden=false;disabled=false;onclick:any=null;
+  constructor(tag:string){this.tag=tag;} append(...nodes:Element[]){for(const n of nodes)n.parent=this;this.children.push(...nodes);} replaceChildren(...nodes:Element[]){this.children=[];this.append(...nodes);}setAttribute(){}focus(){}
+  querySelectorAll(selector:string):Element[]{return this.children.flatMap(n=>[...(n.tag===selector?[n]:[]),...n.querySelectorAll(selector)]);}
+ }
+ const elements=new Map<string,Element>();const document={activeElement:null,createElement:(tag:string)=>new Element(tag),createTextNode:(value:string)=>Object.assign(new Element('#text'),{textContent:value}),getElementById:(id:string)=>{if(!elements.has(id))elements.set(id,new Element('div'));return elements.get(id);}};
+ const poster={bytes:9,md5:hash},items=['10000','10001','10002'].map(id=>({row:row(id,3),poster,reason:null}));
+ const calls:{url:string;method?:string}[]=[];let answer=true,deleteStatus=204;const confirms:string[]=[];
+ new vm.Script(script).runInNewContext({document,URLSearchParams,window:{confirm:(m:string)=>{confirms.push(m);return answer;}},fetch:async(url:string,init?:{method?:string})=>{calls.push({url,method:init?.method});
+  if(init?.method==='DELETE')return {status:deleteStatus,ok:deleteStatus<300};
+  return {ok:true,json:async()=>({items,eligible:3,nextCursor:null,checkedAt:'2026-11-06'})};}});
+ await (elements.get('thumbnail-scan') as any).onclick();
+ const results=elements.get('thumbnail-results')!,buttons=()=>results.querySelectorAll('button').filter(b=>Object.hasOwn(b.dataset,'deleteVideo'));
+ assert.equal(buttons().length,3);assert.ok(buttons().every(b=>!b.disabled));
+ answer=false;await buttons()[1]!.onclick();assert.equal(calls.filter(c=>c.method==='DELETE').length,0,'cancelled confirm sends nothing');
+ assert.match(confirms[0]!,/10001/);assert.match(confirms[0]!,/no undo/i);
+ answer=true;deleteStatus=500;await buttons()[1]!.onclick();
+ assert.match(elements.get('thumbnail-status')!.textContent,/could not be deleted/i);assert.equal(buttons().length,3,'failed delete keeps the card');
+ deleteStatus=204;await buttons()[1]!.onclick();
+ assert.deepEqual(calls.filter(c=>c.method==='DELETE').map(c=>c.url),['/api/videos/10001','/api/videos/10001']);
+ assert.equal(buttons().length,2);const text=(e:Element):string=>e.textContent+' '+e.children.map(text).join(' ');
+ const gone=results.querySelectorAll('article').find(a=>a.dataset.post==='10001')!;assert.match(text(gone),/Deleted/);assert.equal(gone.querySelectorAll('video').length,0,'deleted card stops offering playback');
+ assert.match(elements.get('thumbnail-status')!.textContent,/deleted/i);assert.ok(buttons().every(b=>!b.disabled),'controls unlock after deletion');
 });

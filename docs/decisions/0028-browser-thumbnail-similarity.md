@@ -21,3 +21,5 @@ Revisit with representative owner-reviewed samples before adjusting thresholds, 
 Sources: [createImageBitmap](https://developer.mozilla.org/en-US/docs/Web/API/Window/createImageBitmap), [Canvas getImageData](https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/getImageData) (Context7 consulted2026-11-06).
 
 Deployment follow-up2026-11-06: owner authorized testing after accepting fullscreen Reels. Combined release61703e1 deployed; PR merge still requires thumbnail acceptance. Algorithm/privacy/delete policy unchanged.
+
+Follow-up 2026-11-07: owner authorized per-card single-video deletion from suggestions; see ADR-0029. Similarity algorithm unchanged.

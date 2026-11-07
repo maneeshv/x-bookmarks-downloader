@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { renderDuplicates } from '#src/html';
 import { posterPixels } from '#test/fixtures/perceptual';
 class Element {
- children:Element[]=[];parent:Element|null=null;dataset:Record<string,string>={};className='';textContent='';tag:string;hidden=false;disabled=false;poster='';preload='';type='';
+ children:Element[]=[];parent:Element|null=null;dataset:Record<string,string>={};className='';textContent='';tag:string;hidden=false;disabled=false;poster='';preload='';type='';src='';
  constructor(tag:string){this.tag=tag;}
  append(...nodes:Element[]){for(const n of nodes)n.parent=this;this.children.push(...nodes);}
  replaceChildren(...nodes:Element[]){this.children=[];this.append(...nodes);}
@@ -17,7 +17,7 @@ class Element {
  toDataURL(){return 'data:image/jpeg;base64,fixture';}
 }
 const text=(e:Element):string=>e.textContent+' '+e.children.map(text).join(' ');
-test('real emitted similarity controller produces review-only pairs from bounded image reads and prunes later exact matches',async()=>{
+test('real emitted similarity controller produces playable, deletable pairs from bounded image reads and prunes later exact matches',async()=>{
  const elements=new Map<string,Element>(),requests:string[]=[];let closed=0;
  const document={activeElement:null,createElement:(tag:string)=>new Element(tag),createTextNode:(value:string)=>Object.assign(new Element('#text'),{textContent:value}),getElementById:(id:string)=>{if(!elements.has(id))elements.set(id,new Element('div'));return elements.get(id);}};
  const image=readFileSync('test/fixtures/thumbnails/original.png');
@@ -29,7 +29,8 @@ test('real emitted similarity controller produces review-only pairs from bounded
  const script=renderDuplicates().match(/<script>([\s\S]*?)<\/script>/)![1]!;
  new vm.Script(script).runInNewContext({document,fetch,Blob,AbortController,Uint8Array,DataView,URLSearchParams,setTimeout,clearTimeout,createImageBitmap:async()=>({width:180,height:160,close(){closed++;}})});
  assert.equal(requests.length,0);await (elements.get('similar-scan') as any).onclick();
- const results=elements.get('similar-results')!;assert.equal(results.children.length,1);assert.equal(results.querySelectorAll('input').length,0);assert.equal(results.querySelectorAll('button').length,0);
+ const results=elements.get('similar-results')!;assert.equal(results.children.length,1);assert.equal(results.querySelectorAll('input').length,0);assert.equal(results.querySelectorAll('button').length,2,'each similar card offers Delete this video');
+ for(const video of results.querySelectorAll('video'))assert.match(video.src,/^\/v\/9100[01]\.mp4$/,'pairs play inline');
  assert.match(text(results),/100.0% hash similarity/);assert.match(text(results),/3 B · 0:02/);assert.match(text(results),/70 B · 0:09/);assert.doesNotMatch(text(results),/reclaim|remove this|keep this/i);
  for(const video of results.querySelectorAll('video')){assert.equal(video.preload,'none');assert.match(video.poster,/^data:image\/jpeg/);}
  assert.equal(results.querySelectorAll('a').filter((a:any)=>a.href.startsWith('/watch/')).length,2);
